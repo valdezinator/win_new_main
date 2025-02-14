@@ -1,0 +1,10 @@
+0000000000000000000000000000000000000000 3134cdca96d185624a55bb4ba9617da6f6711099 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739176711 +0530	commit (initial): first commit
+3134cdca96d185624a55bb4ba9617da6f6711099 b175862e5f8eba17cd13f90c02c14f86d1c48003 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739267251 +0530	commit: Working
+b175862e5f8eba17cd13f90c02c14f86d1c48003 54f636934ec6a7b60dda7367db595bc2043db8db PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739334075 +0530	commit: Songs play well.
+54f636934ec6a7b60dda7367db595bc2043db8db 7cbc2863bdfe66c71c41799c07b04c7548c3cdbf PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739346441 +0530	commit: Works for now.
+7cbc2863bdfe66c71c41799c07b04c7548c3cdbf af47fae144e95d1982c6ce92744d6bd98b474dd9 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739349745 +0530	commit: Works
+af47fae144e95d1982c6ce92744d6bd98b474dd9 44fc95909c970092ea6a37022be7fe0ebb9c34e4 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739392371 +0530	commit: Add SVG icons and update pubspec.yaml for new assets
+44fc95909c970092ea6a37022be7fe0ebb9c34e4 56e2f88419902ac50bd821b659d0d22e5008e30f PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739477345 +0530	commit: Queue design updated
+56e2f88419902ac50bd821b659d0d22e5008e30f 14d3f57dad8eaaa133b486f9894f2609554751b9 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739519980 +0530	commit: Add secure storage and download services with encryption support
+14d3f57dad8eaaa133b486f9894f2609554751b9 0d288e2ca24c6eb2e8326e50de894a7564bf2e3d PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739555184 +0530	commit: Update app icon, add file_picker dependency, and optimize widget decorations
+0d288e2ca24c6eb2e8326e50de894a7564bf2e3d ea90192c4dbba9e195b2aab897b00826427c2588 PeterParker2008 <81066924+PeterParker2008@users.noreply.github.com> 1739559554 +0530	commit: Changes?

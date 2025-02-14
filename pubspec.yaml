@@ -1,0 +1,43 @@
+name: win_new
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.17
+  google_fonts: ^6.2.1
+  just_audio: ^0.9.35
+  palette_generator: ^0.3.3+5
+  supabase: ^2.6.2
+  supabase_flutter: ^2.8.3
+  uni_links: ^0.5.1
+  url_launcher: ^6.2.5
+  http: ^1.3.0
+  oauth2: ^2.0.3
+  window_to_front: ^0.0.3
+  flutter_appauth: ^8.0.3
+  flutter_secure_storage: ^4.2.1
+  audio_session: ^0.1.25
+  just_audio_windows: ^0.2.2
+  just_audio_background: ^0.0.1-beta.15
+  shared_preferences: ^2.5.2
+  flutter_web_auth: ^0.6.0
+  marquee: ^2.3.0
+  encrypt: ^5.0.3
+  file_picker: ^8.3.5
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/

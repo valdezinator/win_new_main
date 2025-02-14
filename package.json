@@ -1,0 +1,12 @@
+{
+  "name": "win-new-auth-server",
+  "version": "1.0.0",
+  "description": "Auth callback server for Win New app",
+  "main": "auth_server.js",
+  "scripts": {
+    "start": "node auth_server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
