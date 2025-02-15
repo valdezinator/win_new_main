@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http; // NEW import
 import 'dart:convert'; // NEW import
 import 'package:flutter_svg/flutter_svg.dart'; // Add this import
+import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -247,12 +248,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                       child: album['image_url'] != null
-                        ? Image.network(
-                            album['image_url'],
+                        ? CachedNetworkImage(
+                            imageUrl: album['image_url'],
                             height: 200,
                             width: 200,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
+                            errorWidget: (context, url, error) =>
                               Container(
                                 height: 200,
                                 width: 200,
@@ -322,10 +323,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 aspectRatio: 1,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
-                  child: Image.network(
-                    song['image_url'] ?? '',
+                  child: CachedNetworkImage(
+                    imageUrl: song['image_url'] ?? '',
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorWidget: (_, __, ___) => Container(
                       color: Colors.grey[850],
                       child: const Icon(Icons.music_note, color: Colors.white54, size: 16),
                     ),
@@ -351,16 +352,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void playSong(Map<String, dynamic> song) {
-    // Ensure we update the current song properly
     setState(() {
       _currentSong = song;
     });
     if (song['audio_url'] != null) {
       final songWithQueue = {
         ...Map<String, dynamic>.from(song),
-        'queue': song['queue'] ?? [],
       };
-      _audioService.playSong(songWithQueue);
+      // Use the new cached play method:
+      _audioService.playSongWithCache(songWithQueue);
     }
   }
 
@@ -808,10 +808,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 height: 60,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                  child: Image.network(
-                    song['image_url'] ?? '',
+                  child: CachedNetworkImage(
+                    imageUrl: song['image_url'] ?? '',
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorWidget: (_, __, ___) => Container(
                       color: Colors.grey[850],
                       child: const Icon(Icons.music_note, color: Colors.white54),
                     ),
@@ -887,12 +887,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 height: 180,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    album['image_url'] ?? '',
+                  child: CachedNetworkImage(
+                    imageUrl: album['image_url'] ?? '',
                     height: 180,
                     width: 180,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorWidget: (_, __, ___) => Container(
                       color: Colors.grey[850],
                       child: const Icon(Icons.album, color: Colors.white54, size: 48),
                     ),
@@ -986,13 +986,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 color: Colors.grey[850],
               ),
               child: ClipOval(
-                child: artist['image_url'] != null
-                  ? Image.network(
-                      artist['image_url'],
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white54, size: 48), // Increased icon size
-                    )
-                  : const Icon(Icons.person, color: Colors.white54, size: 48), // Increased icon size
+                child: CachedNetworkImage(
+                  imageUrl: artist['image_url'] ?? '',
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[850],
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[850],
+                    child: const Icon(Icons.person, color: Colors.white54, size: 48), // Increased icon size
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12), // Increased spacing
@@ -1054,7 +1059,7 @@ class _NewReleaseItemState extends State<NewReleaseItem> {
                 ]
               : [],
           image: DecorationImage(
-            image: NetworkImage(widget.imageUrl),
+            image: CachedNetworkImageProvider(widget.imageUrl),
             fit: BoxFit.cover,
             colorFilter: _isHovering
                 ? ColorFilter.mode(Colors.black.withOpacity(0.5), BlendMode.dstATop)
@@ -1107,10 +1112,10 @@ class ArtistDetailsPage extends StatelessWidget {
                   height: 300,
                   width: double.infinity,
                   child: artist['image_url'] != null
-                      ? Image.network(
-                          artist['image_url'],
+                      ? CachedNetworkImage(
+                          imageUrl: artist['image_url'],
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: Colors.grey[850]),
+                          errorWidget: (_, __, ___) => Container(color: Colors.grey[850]),
                         )
                       : Container(color: Colors.grey[850]),
                 ),

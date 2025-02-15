@@ -3,6 +3,9 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 class AudioService {
   static final AudioService _instance = AudioService._internal();
@@ -168,6 +171,28 @@ class AudioService {
       rethrow;
     }
     print('=== PlaySong Completed ===\n');
+  }
+
+  // Plays song with caching
+  Future<void> playSongWithCache(Map<String, dynamic> song) async {
+    final String url = song['audio_url'];
+    final String localPath = await _getCachedFilePath(url);
+    final File file = File(localPath);
+    if (!await file.exists()) {
+      // Download and cache audio if not already cached
+      final response = await http.get(Uri.parse(url));
+      await file.writeAsBytes(response.bodyBytes);
+    }
+    // Play from local file
+    await player.setFilePath(localPath);
+    player.play();
+  }
+
+  // Helper: get file path in cache dir for a given URL
+  Future<String> _getCachedFilePath(String url) async {
+    final Directory cacheDir = await getTemporaryDirectory();
+    final String fileName = url.hashCode.toString(); // simple hash as filename
+    return "${cacheDir.path}/$fileName.mp3";
   }
 
   Future<void> togglePlayPause() async {

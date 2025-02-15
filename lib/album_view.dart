@@ -7,6 +7,7 @@ import 'music_player.dart';
 import 'widgets/queue_list.dart';
 import 'home_page.dart'; // Add HomeScreen import
 import 'services/download_service.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 
 class AlbumView extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -380,42 +381,30 @@ class _AlbumViewState extends State<AlbumView> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: widget.album['image_url'] != null
-          ? Image.network(
-              widget.album['image_url'],
+          ? CachedNetworkImage(
+              imageUrl: widget.album['image_url'],
               fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  color: Colors.grey[900],
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                print('Error loading album cover: $error');
-                return Container(
-                  color: Colors.grey[800],
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.album, color: Colors.white, size: 50),
-                      SizedBox(height: 8),
-                      Text(
-                        'Image not available',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
+              placeholder: (context, url) => Container(
+                color: Colors.grey[900],
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Colors.grey[800],
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.album, color: Colors.white, size: 50),
+                    SizedBox(height: 8),
+                    Text(
+                      'Image not available',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
                       ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
             )
           : Container(
               color: Colors.grey[800],
@@ -743,12 +732,18 @@ class _AlbumViewState extends State<AlbumView> {
               // Song Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: Image.network(
-                  entry.value['image_url'] ?? widget.album['image_url'] ?? '',
+                child: CachedNetworkImage(
+                  imageUrl: entry.value['image_url'] ?? widget.album['image_url'] ?? '',
                   width: 40,
                   height: 40,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  placeholder: (context, url) => Container(
+                    width: 40,
+                    height: 40,
+                    color: Colors.grey[850],
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (context, url, error) => Container(
                     width: 40,
                     height: 40,
                     color: Colors.grey[850],

@@ -203,6 +203,12 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
     );
   }
 
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return "$minutes:${seconds.toString().padLeft(2, '0')}";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Focus(
@@ -393,23 +399,37 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 2,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                          activeTrackColor: const Color.fromARGB(255, 26, 107, 37),
-                          inactiveTrackColor: Colors.grey[800],
-                          thumbColor: const Color.fromARGB(255, 26, 107, 37),
-                          overlayColor: Colors.white.withOpacity(0.2),
-                        ),
-                        child: Slider(
-                          value: currentPosition.inSeconds.toDouble(),
-                          max: totalDuration.inSeconds.toDouble(),
-                          onChanged: (value) {
-                            _audioService.player.seek(Duration(seconds: value.toInt()));
-                          },
-                        ),
+                      child: Row(
+                        children: [
+                          Text(
+                            _formatDuration(currentPosition),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                trackHeight: 2,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                                activeTrackColor: const Color.fromARGB(255, 26, 107, 37),
+                                inactiveTrackColor: Colors.grey[800],
+                                thumbColor: const Color.fromARGB(255, 26, 107, 37),
+                                overlayColor: Colors.white.withOpacity(0.2),
+                              ),
+                              child: Slider(
+                                value: currentPosition.inSeconds.toDouble(),
+                                max: totalDuration.inSeconds.toDouble(),
+                                onChanged: (value) {
+                                  _audioService.player.seek(Duration(seconds: value.toInt()));
+                                },
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _formatDuration(totalDuration),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ],
                       ),
                     ),
                     // Playback Controls
