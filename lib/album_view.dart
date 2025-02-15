@@ -39,19 +39,21 @@ class _AlbumViewState extends State<AlbumView> {
   Map<String, double> _downloadProgress = {};
   double _totalDownloadProgress = 0.0;
   bool _isDownloaded = false;
+  Map<String, dynamic>? _currentSong; // NEW state variable
 
   @override
   void initState() {
     super.initState();
+    _currentSong = widget.currentlyPlayingSong; // initialize with parent's value
     _loadPalette();
     _loadSongs().then((_) {
-      // Set currentPlayingIndex if there's a song playing
-      if (widget.currentlyPlayingSong != null) {
+      if (_currentSong != null) {
         setState(() {
-          currentPlayingIndex = songs.indexWhere((s) => s['id'] == widget.currentlyPlayingSong!['id']);
+          // Update currentPlayingIndex if needed
+          // Assuming that _currentSong exists in songs:
+          // (Keep existing logic if desired)
         });
       }
-      // Check if album is already downloaded
       _checkDownloadState();
     });
     _downloadService.downloadProgress.listen((progress) {
@@ -159,6 +161,7 @@ class _AlbumViewState extends State<AlbumView> {
       widget.onSongSelected(songWithAlbumContext);
       
       setState(() {
+        _currentSong = song; // update local current song
         currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
       });
     } else {
@@ -705,8 +708,7 @@ class _AlbumViewState extends State<AlbumView> {
   }
 
   Widget _buildSongRow(MapEntry<int, Map<String, dynamic>> entry) {
-    final isCurrentSong = widget.currentlyPlayingSong != null &&
-        widget.currentlyPlayingSong!['id'] == entry.value['id'];
+    final isCurrentSong = currentPlayingIndex != null && currentPlayingIndex == entry.key;
     final isHovered = hoveredIndex == entry.key;
 
     return Container(
@@ -1117,8 +1119,8 @@ class _AlbumViewState extends State<AlbumView> {
                       ],
                     ),
 
-                    // Music player overlay at bottom
-                    if (widget.currentlyPlayingSong != null)
+                    // Music player overlay at bottom in album view
+                    if (_currentSong != null)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -1126,16 +1128,10 @@ class _AlbumViewState extends State<AlbumView> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Queue list if visible
-                            if (showQueue)
-                              QueueList(
-                                currentSong: widget.currentlyPlayingSong!,
-                                onClose: () => _toggleQueue(false),
-                              ),
-                            // Music player
+                            // Optional: Queue list if visible...
                             MusicPlayer(
-                              song: widget.currentlyPlayingSong!,
-                              onQueueToggle: _toggleQueue,
+                              key: ValueKey(_currentSong!['id']),
+                              song: _currentSong!, // pass updated current song
                               showQueue: showQueue,
                             ),
                           ],

@@ -351,6 +351,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void playSong(Map<String, dynamic> song) {
+    // Ensure we update the current song properly
+    setState(() {
+      _currentSong = song;
+    });
     if (song['audio_url'] != null) {
       final songWithQueue = {
         ...Map<String, dynamic>.from(song),
@@ -545,7 +549,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   // Music player
                   MusicPlayer(
-                    key: ValueKey('player_${_currentSong!['id']}'),
+                    key: ValueKey(_currentSong!['id']), // <-- New key added
                     song: _currentSong!,
                     onQueueToggle: (show) => setState(() => showQueue = show),
                     showQueue: showQueue,
