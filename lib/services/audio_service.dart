@@ -113,6 +113,8 @@ class AudioService {
 
   Future<void> playSong(Map<String, dynamic> song) async {
     print('\n=== PlaySong Called ===');
+    print('Song data: ${song.toString()}');
+    
     try {
       // Stop any current playback first
       print('Stopping current playback...');
@@ -127,27 +129,36 @@ class AudioService {
       print('Setting up new song...');
       String? audioUrl = song['audio_url']?.toString();
       if (audioUrl == null || audioUrl.isEmpty) {
-        throw Exception('Invalid audio URL');
+        throw Exception('Invalid audio URL: $audioUrl');
       }
+
+      // Ensure URL is properly formatted
+      if (!audioUrl.startsWith('http://') && !audioUrl.startsWith('https://')) {
+        audioUrl = 'https://$audioUrl';
+      }
+      print('Audio URL: $audioUrl');
 
       // Update state
       _currentSong = Map<String, dynamic>.from(song);
       _currentSongController.add(_currentSong!);
       
-      // Update queue
+      // Update queue if available
       if (song['queue'] != null) {
+        print('Queue found, updating queue state');
         _queue = List<Map<String, dynamic>>.from(song['queue']);
         _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
+        print('Current index in queue: $_currentIndex');
       }
 
-      // Create and set audio source
+      // Create and set audio source with proper metadata
       final audioSource = AudioSource.uri(
-        Uri.parse(audioUrl.startsWith('http') ? audioUrl : 'https://$audioUrl'),
+        Uri.parse(audioUrl),
         tag: MediaItem(
           id: song['id']?.toString() ?? '',
           title: song['title']?.toString() ?? 'Unknown',
           artist: song['artist']?.toString() ?? 'Unknown Artist',
           artUri: song['image_url'] != null ? Uri.parse(song['image_url']) : null,
+          album: song['album']?.toString(),
         ),
       );
 
@@ -162,9 +173,9 @@ class AudioService {
       print('Playback started successfully');
       await _saveLastPlayedSong();
       
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error in playSong: $e');
-      print(StackTrace.current);
+      print('Stack trace: $stackTrace');
       // Reset state on error
       _isPlaying = false;
       _isPlayingController.add(false);

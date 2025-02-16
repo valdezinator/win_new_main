@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'dart:math';
+import 'dart:ui'; // Add this import
 import 'services/audio_service.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -128,7 +129,10 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
 
     final currentIndex = queue.indexWhere((song) => song['id'] == widget.song['id']);
     if (currentIndex < queue.length - 1) {
-      widget.song['onSongSelected']?.call(queue[currentIndex + 1]);
+      final nextSong = queue[currentIndex + 1];
+      // Preserve the queue in the next song
+      nextSong['queue'] = queue;
+      _audioService.playSong(nextSong);
     }
   }
 
@@ -138,7 +142,10 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
 
     final currentIndex = queue.indexWhere((song) => song['id'] == widget.song['id']);
     if (currentIndex > 0) {
-      widget.song['onSongSelected']?.call(queue[currentIndex - 1]);
+      final previousSong = queue[currentIndex - 1];
+      // Preserve the queue in the previous song
+      previousSong['queue'] = queue;
+      _audioService.playSong(previousSong);
     }
   }
 
@@ -165,11 +172,11 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   }
 
   void _handleNext() {
-    _audioService.playNext();
+    _playNextSong();
   }
 
   void _handlePrevious() {
-    _audioService.playPrevious();
+    _playPreviousSong();
   }
 
   @override
@@ -209,325 +216,419 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
     return "$minutes:${seconds.toString().padLeft(2, '0')}";
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: false,
-      onKeyEvent: (node, event) {
-        // Handle repeated key events
-        if (event is KeyRepeatEvent) {
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          height: 90,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF181818),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 20,
-                spreadRadius: 5,
-                offset: const Offset(0, 5),
-              ),
-            ],
+  // NEW: Build lyrics overlay with glassmorphism and synced highlighting
+  Widget _buildLyricsOverlay() {
+    if (widget.song['song_lyrics'] == null || widget.song['song_lyrics'].isEmpty) {
+      return Positioned.fill(
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: const Text(
+              "No lyrics found",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white),
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // First Column - Song Info
-              Container(
-                width: 300,
-                padding: const EdgeInsets.all(12),
-                child: IntrinsicWidth(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            widget.song['image_url'] ?? '',
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                                width: 80,
-                                height: 80,
-                                color: Colors.grey[800],
-                                child: const Icon(Icons.music_note, color: Colors.white, size: 36),
-                              ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 180),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                height: 20,
-                                width: 180,
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final text = widget.song['title'] ?? 'Unknown';
-                                    final textPainter = TextPainter(
-                                      text: TextSpan(
-                                        text: text,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      maxLines: 1,
-                                      textDirection: TextDirection.ltr,
-                                    )..layout(maxWidth: double.infinity);
-
-                                    if (textPainter.width > constraints.maxWidth) {
-                                      return Marquee(
-                                        text: text,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        scrollAxis: Axis.horizontal,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        blankSpace: 20.0,
-                                        velocity: 30.0,
-                                        pauseAfterRound: const Duration(seconds: 1),
-                                        startPadding: 10.0,
-                                        accelerationDuration: const Duration(seconds: 1),
-                                        accelerationCurve: Curves.linear,
-                                        decelerationDuration: const Duration(milliseconds: 500),
-                                        decelerationCurve: Curves.easeOut,
-                                      );
-                                    }
-                                    return Text(
-                                      text,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              SizedBox(
-                                height: 16,
-                                width: 180,
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final text = widget.song['artist'] ?? 'Unknown Artist';
-                                    final textPainter = TextPainter(
-                                      text: TextSpan(
-                                        text: text,
-                                        style: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      maxLines: 1,
-                                      textDirection: TextDirection.ltr,
-                                    )..layout(maxWidth: double.infinity);
-
-                                    if (textPainter.width > constraints.maxWidth) {
-                                      return Marquee(
-                                        text: text,
-                                        style: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 12,
-                                        ),
-                                        scrollAxis: Axis.horizontal,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        blankSpace: 20.0,
-                                        velocity: 30.0,
-                                        pauseAfterRound: const Duration(seconds: 1),
-                                        startPadding: 10.0,
-                                        accelerationDuration: const Duration(seconds: 1),
-                                        accelerationCurve: Curves.linear,
-                                        decelerationDuration: const Duration(milliseconds: 500),
-                                        decelerationCurve: Curves.easeOut,
-                                      );
-                                    }
-                                    return Text(
-                                      text,
-                                      style: TextStyle(
-                                        color: Colors.grey[400],
-                                        fontSize: 12,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        ),
+      );
+    }
+    final lyricsText = widget.song['song_lyrics'];
+    final words = lyricsText.split(' ');
+    final totalWords = words.length;
+    int highlightedIndex = 0;
+    if (totalDuration.inMilliseconds > 0) {
+      final progress = currentPosition.inMilliseconds / totalDuration.inMilliseconds;
+      highlightedIndex = (progress * totalWords).clamp(0, totalWords - 1).toInt();
+    }
+    List<TextSpan> spans = [];
+    for (var i = 0; i < totalWords; i++) {
+      spans.add(TextSpan(
+        text: words[i] + " ",
+        style: TextStyle(
+          color: i == highlightedIndex ? Colors.greenAccent : Colors.white,
+          fontWeight: i == highlightedIndex ? FontWeight.bold : FontWeight.normal,
+        ),
+      ));
+    }
+    return Positioned.fill(
+      child: GestureDetector(
+        // Tap outside the lyrics box to dismiss the overlay
+        onTap: () => setState(() => showLyrics = false),
+        child: Container(
+          alignment: Alignment.center,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.2)),
+              ),
+              child: SingleChildScrollView(
+                child: RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(children: spans),
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-              // Second Column - Progress Bar and Controls
-              Container(
-                width: 400,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Progress Bar
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.only(bottom: 8),
+  @override
+  Widget build(BuildContext context) {
+    // Wrap original MusicPlayer UI with Stack to support the lyrics overlay.
+    return Stack(
+      children: [
+        Focus(
+          focusNode: _focusNode,
+          autofocus: false,
+          onKeyEvent: (node, event) {
+            // Handle repeated key events
+            if (event is KeyRepeatEvent) {
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              height: 80, // Reduced from 90
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 2), // Reduced bottom margin from 4 to 2
+              decoration: BoxDecoration(
+                color: const Color(0xFF181818),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // First Column - Song Info
+                  Container(
+                    width: 250,
+                    padding: const EdgeInsets.all(12),
+                    child: IntrinsicWidth(
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Text(
-                            _formatDuration(currentPosition),
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderThemeData(
-                                trackHeight: 2,
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                                activeTrackColor: const Color.fromARGB(255, 26, 107, 37),
-                                inactiveTrackColor: Colors.grey[800],
-                                thumbColor: const Color.fromARGB(255, 26, 107, 37),
-                                overlayColor: Colors.white.withOpacity(0.2),
-                              ),
-                              child: Slider(
-                                value: currentPosition.inSeconds.toDouble(),
-                                max: totalDuration.inSeconds.toDouble(),
-                                onChanged: (value) {
-                                  _audioService.player.seek(Duration(seconds: value.toInt()));
-                                },
+                          AspectRatio(
+                            aspectRatio: 1,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                widget.song['image_url'] ?? '',
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    color: Colors.grey[800],
+                                    child: const Icon(Icons.music_note, color: Colors.white, size: 36),
+                                  ),
                               ),
                             ),
                           ),
-                          Text(
-                            _formatDuration(totalDuration),
-                            style: const TextStyle(color: Colors.white70),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 180),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    height: 20,
+                                    width: 180,
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final text = widget.song['title'] ?? 'Unknown';
+                                        final textPainter = TextPainter(
+                                          text: TextSpan(
+                                            text: text,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          maxLines: 1,
+                                          textDirection: TextDirection.ltr,
+                                        )..layout(maxWidth: double.infinity);
+
+                                        if (textPainter.width > constraints.maxWidth) {
+                                          return Marquee(
+                                            text: text,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            scrollAxis: Axis.horizontal,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            blankSpace: 20.0,
+                                            velocity: 30.0,
+                                            pauseAfterRound: const Duration(seconds: 1),
+                                            startPadding: 10.0,
+                                            accelerationDuration: const Duration(seconds: 1),
+                                            accelerationCurve: Curves.linear,
+                                            decelerationDuration: const Duration(milliseconds: 500),
+                                            decelerationCurve: Curves.easeOut,
+                                          );
+                                        }
+                                        return Text(
+                                          text,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  SizedBox(
+                                    height: 16,
+                                    width: 180,
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final text = widget.song['artist'] ?? 'Unknown Artist';
+                                        final textPainter = TextPainter(
+                                          text: TextSpan(
+                                            text: text,
+                                            style: TextStyle(
+                                              color: Colors.grey[400],
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          maxLines: 1,
+                                          textDirection: TextDirection.ltr,
+                                        )..layout(maxWidth: double.infinity);
+
+                                        if (textPainter.width > constraints.maxWidth) {
+                                          return Marquee(
+                                            text: text,
+                                            style: TextStyle(
+                                              color: Colors.grey[400],
+                                              fontSize: 12,
+                                            ),
+                                            scrollAxis: Axis.horizontal,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            blankSpace: 20.0,
+                                            velocity: 30.0,
+                                            pauseAfterRound: const Duration(seconds: 1),
+                                            startPadding: 10.0,
+                                            accelerationDuration: const Duration(seconds: 1),
+                                            accelerationCurve: Curves.linear,
+                                            decelerationDuration: const Duration(milliseconds: 500),
+                                            decelerationCurve: Curves.easeOut,
+                                          );
+                                        }
+                                        return Text(
+                                          text,
+                                          style: TextStyle(
+                                            color: Colors.grey[400],
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    // Playback Controls
-                    Row(
+                  ),
+
+                  // Second Column - Progress Bar and Controls
+                  Container(
+                    width: 400,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildHoverButton(
-                          child: _buildSvgIcon(
-                            'assets/icons/shuffle.svg',
-                            color: isShuffleEnabled ? const Color.fromARGB(255, 54, 150, 67) : Colors.grey[400],
+                        // Progress Bar
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                _formatDuration(currentPosition),
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: SliderThemeData(
+                                    trackHeight: 2,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                                    activeTrackColor: const Color.fromARGB(255, 26, 107, 37),
+                                    inactiveTrackColor: Colors.grey[800],
+                                    thumbColor: const Color.fromARGB(255, 26, 107, 37),
+                                    overlayColor: Colors.white.withOpacity(0.2),
+                                  ),
+                                  child: Slider(
+                                    value: currentPosition.inSeconds.toDouble(),
+                                    max: totalDuration.inSeconds.toDouble(),
+                                    onChanged: (value) {
+                                      _audioService.player.seek(Duration(seconds: value.toInt()));
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _formatDuration(totalDuration),
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
                           ),
-                          onPressed: toggleShuffle,
                         ),
-                        const SizedBox(width: 16),
-                        _buildHoverButton(
-                          icon: Icons.skip_previous,
-                          onPressed: _handlePrevious,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildHoverButton(
-                          icon: isPlaying
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_filled,
-                          onPressed: _handlePlayPause,
-                          size: 36,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildHoverButton(
-                          icon: Icons.skip_next,
-                          onPressed: _handleNext,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildHoverButton(
-                          child: _buildSvgIcon(
-                            'assets/icons/repeat.svg',
-                            color: isRepeatEnabled ? Colors.white : Colors.grey[400],
-                          ),
-                          onPressed: toggleRepeat,
+                        // Playback Controls
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildHoverButton(
+                              child: _buildSvgIcon(
+                                'assets/icons/shuffle.svg',
+                                color: isShuffleEnabled ? const Color.fromARGB(255, 54, 150, 67) : Colors.grey[400],
+                              ),
+                              onPressed: toggleShuffle,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildHoverButton(
+                              icon: Icons.skip_previous,
+                              onPressed: _handlePrevious,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildHoverButton(
+                              icon: isPlaying
+                                ? Icons.pause_circle_filled
+                                : Icons.play_circle_filled,
+                              onPressed: _handlePlayPause,
+                              size: 36,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildHoverButton(
+                              icon: Icons.skip_next,
+                              onPressed: _handleNext,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildHoverButton(
+                              child: _buildSvgIcon(
+                                'assets/icons/repeat.svg',
+                                color: isRepeatEnabled ? Colors.white : Colors.grey[400],
+                              ),
+                              onPressed: toggleRepeat,
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
 
-              // Third Column - Additional Controls
-              Container(
-                width: 200,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _buildHoverButton(
-                      child: _buildSvgIcon(
-                        'assets/icons/queue.svg',
-                        color: widget.showQueue ? Colors.green : Colors.white,
-                        size: 20,
+                  // Third Column - Additional Controls (shifted left using Transform.translate)
+                  Transform.translate(
+                    offset: const Offset(-10, 0), // Shift left by 10 pixels
+                    child: Container(
+                      width: 200,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _buildHoverButton(
+                            child: _buildSvgIcon(
+                              'assets/icons/queue.svg',
+                              color: widget.showQueue ? Colors.green : Colors.white,
+                              size: 20,
+                            ),
+                            onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildHoverButton(
+                            icon: Icons.headphones_rounded,
+                            size: 20,
+                            onPressed: () {},
+                          ),
+                          const SizedBox(width: 12),
+                          // NEW: Lyrics button for toggling synced lyrics overlay
+                          _buildHoverButton(
+                            child: Icon(
+                              Icons.format_quote,
+                              color: showLyrics ? Colors.green : Colors.white,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                showLyrics = !showLyrics;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            width: 80,
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                trackHeight: 2,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
+                                activeTrackColor: Colors.white,
+                                inactiveTrackColor: Colors.grey[800],
+                                thumbColor: Colors.white,
+                              ),
+                              child: Slider(
+                                value: volume,
+                                onChanged: (value) {
+                                  setState(() => volume = value);
+                                  _audioService.player.setVolume(value);
+                                },
+                              ),
+                            ),
+                          ),
+                          _buildHoverButton(
+                            icon: isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                            size: 20,
+                            onPressed: () => setState(() => isFullScreen = !isFullScreen),
+                          ),
+                        ],
                       ),
-                      onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
                     ),
-                    const SizedBox(width: 12),
-                    _buildHoverButton(
-                      icon: Icons.headphones_rounded,
-                      size: 20,
-                      onPressed: () {},
-                    ),
-                    Container(
-                      width: 80,
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 2,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
-                          activeTrackColor: Colors.white,
-                          inactiveTrackColor: Colors.grey[800],
-                          thumbColor: Colors.white,
-                        ),
-                        child: Slider(
-                          value: volume,
-                          onChanged: (value) {
-                            setState(() => volume = value);
-                            _audioService.player.setVolume(value);
-                          },
-                        ),
-                      ),
-                    ),
-                    _buildHoverButton(
-                      icon: isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                      size: 20,
-                      onPressed: () => setState(() => isFullScreen = !isFullScreen),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+        // If lyrics overlay is toggled, display it on top of the MusicPlayer UI.
+        if (showLyrics) _buildLyricsOverlay(),
+      ],
     );
   }
 

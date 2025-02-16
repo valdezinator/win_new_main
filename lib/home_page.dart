@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           .eq('category', 'hits')
           .order('release_date', ascending: false);
 
-      print('Hit Albums Response: $response');
+      // print('Hit Albums Response: $response');
 
       if (response.isEmpty) {
         throw Exception('No hit albums found');
@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching hit albums: $e');
+      // print('Error fetching hit albums: $e');
       rethrow;
     }
   }
@@ -228,7 +228,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   builder: (context) => AlbumView(
                     album: album,
                     supabaseClient: supabaseClient,
-                    onSongSelected: playSong,
+                    onSongSelected: (newSong) {
+                      // NEW: Update the UI to play the selected song.
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MusicPlayer(song: newSong),
+                        ),
+                      );
+                    },
                     currentlyPlayingSong: _currentSong,  // Pass current song
                   ),
                 ),
@@ -352,15 +360,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void playSong(Map<String, dynamic> song) {
-    setState(() {
-      _currentSong = song;
-    });
-    if (song['audio_url'] != null) {
-      final songWithQueue = {
+    try {
+      print('Playing song: ${song.toString()}');
+      
+      // Ensure we have all required fields
+      if (song['audio_url'] == null) {
+        print('Error: No audio URL provided');
+        return;
+      }
+
+      // Create complete song context with queue
+      final songWithContext = {
         ...Map<String, dynamic>.from(song),
+        'queue': [], // Initialize empty queue if none exists
+        'image_url': song['image_url'] ?? '', // Ensure image_url exists
+        'artist': song['artist'] ?? 'Unknown Artist',
+        'title': song['title'] ?? 'Unknown Title',
       };
-      // Use the new cached play method:
-      _audioService.playSongWithCache(songWithQueue);
+
+      // Update UI state
+      setState(() {
+        _currentSong = songWithContext;
+      });
+
+      // Play the song
+      _audioService.playSong(songWithContext);
+    } catch (e) {
+      print('Error playing song: $e');
+      // Show error to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error playing song: ${e.toString()}')),
+      );
     }
   }
 

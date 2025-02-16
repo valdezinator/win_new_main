@@ -60,14 +60,27 @@ class _QueueListState extends State<QueueList> {
 
   @override
   Widget build(BuildContext context) {
-    final queue = List<Map<String, dynamic>>.from(widget.currentSong['queue'] ?? []);
+    // Get full queue and find current index
+    final fullQueue = List<Map<String, dynamic>>.from(widget.currentSong['queue'] ?? []);
+    final currentIndex = fullQueue.indexWhere((song) => song['id'] == widget.currentSong['id']);
+    
+    // Create queue with only current and upcoming songs
+    final queue = currentIndex != -1 
+        ? fullQueue.sublist(currentIndex) 
+        : fullQueue;
+
+    print('=== Queue List Debug ===');
+    print('Current song: ${widget.currentSong['title']}');
+    print('Queue length: ${queue.length}');
+    print('Queue contents: ${queue.map((s) => s['title']).toList()}');
+    print('=======================');
 
     return Align(
       alignment: Alignment.bottomRight,
       child: Container(
         width: 400,
         height: 300,
-        margin: const EdgeInsets.only(right: 16, bottom: 100),
+        margin: const EdgeInsets.only(right: 16, bottom: 30), // Reduced from 100 to 90
         decoration: BoxDecoration(
           color: const Color(0xFF181818), // Solid background instead of transparent
           borderRadius: BorderRadius.circular(8),
@@ -115,9 +128,11 @@ class _QueueListState extends State<QueueList> {
                 itemCount: queue.length,
                 itemBuilder: (context, index) {
                   final song = queue[index];
-                  final isCurrentSong = song['id'] == widget.currentSong['id'];
-                  final isHovered = index == hoveredIndex;
-
+                  final isCurrentSong = index == 0; // First item is current song
+                  final isHovered = index == hoveredIndex; // Fix: use hoveredIndex
+                  
+                  print('Queue item ${index}: ${song['title']}'); // Add debug print
+                  
                   return MouseRegion(
                     onEnter: (_) => setState(() => hoveredIndex = index),
                     onExit: (_) => setState(() => hoveredIndex = null),

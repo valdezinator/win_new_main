@@ -141,32 +141,54 @@ class _AlbumViewState extends State<AlbumView> {
   }
 
   void _playSong(Map<String, dynamic> song) {
-    if (song['audio_url'] != null) {
-      // Create a complete song context with all required metadata
+    if (song['audio_url'] == null) {
+      print('Error: No audio URL for song ${song['title']}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot play song: Missing audio URL')),
+      );
+      return;
+    }
+  
+    try {
+      // Format queue data first to ensure all songs have required fields
+      final formattedQueue = songs.map((s) => {
+        ...Map<String, dynamic>.from(s),
+        'id': s['id'],
+        'title': s['title'] ?? 'Unknown',
+        'artist': s['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+        'audio_url': s['audio_url'],
+        'image_url': s['image_url'] ?? widget.album['image_url'],
+        'album': widget.album['playlist_name'] ?? widget.album['title'],
+        'album_id': widget.album['id'],
+      }).toList();
+
+      // Create song context with formatted queue
       final songWithAlbumContext = {
         ...Map<String, dynamic>.from(song),
+        'id': song['id'],
         'album': widget.album['playlist_name'] ?? widget.album['title'],
         'album_id': widget.album['id'],
         'album_art': widget.album['image_url'],
-        'image_url': song['image_url'] ?? widget.album['image_url'],  // Use song image or fall back to album image
+        'image_url': song['image_url'] ?? widget.album['image_url'],
         'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
-        'queue': songs.map((s) => {
-          ...Map<String, dynamic>.from(s),
-          'image_url': s['image_url'] ?? widget.album['image_url'],
-          'artist': s['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-        }).toList(),
+        'queue': formattedQueue, // Use the formatted queue
       };
       
       print('Playing song with metadata: $songWithAlbumContext');
+      print('Queue size: ${formattedQueue.length}');
+      
       widget.onSongSelected(songWithAlbumContext);
       
       setState(() {
-        _currentSong = song; // update local current song
+        _currentSong = songWithAlbumContext; // Store full context including queue
         currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
       });
-    } else {
-      print('Error: No audio URL for song ${song['title']}');
+    } catch (e) {
+      print('Error playing song: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error playing song: ${e.toString()}')),
+      );
     }
   }
 
@@ -707,7 +729,9 @@ class _AlbumViewState extends State<AlbumView> {
       child: Material(
         color: isHovered ? Colors.white.withOpacity(0.1) : Colors.transparent,
         child: InkWell(
-          onTap: () => _playSong(entry.value),
+          onTap: () {
+            _playSong(entry.value);
+          },
           onHover: (hover) {
             setState(() {
               hoveredIndex = hover ? entry.key : null;
@@ -1123,11 +1147,18 @@ class _AlbumViewState extends State<AlbumView> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Optional: Queue list if visible...
+                            // Show queue if visible
+                            if (showQueue)
+                              QueueList(
+                                currentSong: _currentSong!,
+                                onClose: () => _toggleQueue(false),
+                              ),
+                            // Music player
                             MusicPlayer(
                               key: ValueKey(_currentSong!['id']),
-                              song: _currentSong!, // pass updated current song
+                              song: _currentSong!,
                               showQueue: showQueue,
+                              onQueueToggle: _toggleQueue,  // Add this line
                             ),
                           ],
                         ),
