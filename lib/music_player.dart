@@ -322,7 +322,7 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                 children: [
                   // First Column - Song Info
                   Container(
-                    width: 250,
+                    width: 220,
                     padding: const EdgeInsets.all(12),
                     child: IntrinsicWidth(
                       child: Row(
@@ -469,8 +469,8 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
 
                   // Second Column - Progress Bar and Controls
                   Container(
-                    width: 400,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    width: 340,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -522,12 +522,12 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                               ),
                               onPressed: toggleShuffle,
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 10),
                             _buildHoverButton(
                               icon: Icons.skip_previous,
                               onPressed: _handlePrevious,
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 10),
                             _buildHoverButton(
                               icon: isPlaying
                                 ? Icons.pause_circle_filled
@@ -535,12 +535,12 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                               onPressed: _handlePlayPause,
                               size: 36,
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 10),
                             _buildHoverButton(
                               icon: Icons.skip_next,
                               onPressed: _handleNext,
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 10),
                             _buildHoverButton(
                               child: _buildSvgIcon(
                                 'assets/icons/repeat.svg',
@@ -554,12 +554,12 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                     ),
                   ),
 
-                  // Third Column - Additional Controls (shifted left using Transform.translate)
+                  // Third Column - Additional Controls
                   Transform.translate(
-                    offset: const Offset(-10, 0), // Shift left by 10 pixels
+                    offset: const Offset(-25, 0),
                     child: Container(
-                      width: 200,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      width: 160,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -567,23 +567,22 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                             child: _buildSvgIcon(
                               'assets/icons/queue.svg',
                               color: widget.showQueue ? Colors.green : Colors.white,
-                              size: 20,
+                              size: 16,
                             ),
                             onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 6),
                           _buildHoverButton(
                             icon: Icons.headphones_rounded,
-                            size: 20,
+                            size: 16,
                             onPressed: () {},
                           ),
-                          const SizedBox(width: 12),
-                          // NEW: Lyrics button for toggling synced lyrics overlay
+                          const SizedBox(width: 6),
                           _buildHoverButton(
                             child: Icon(
                               Icons.format_quote,
                               color: showLyrics ? Colors.green : Colors.white,
-                              size: 20,
+                              size: 16,
                             ),
                             onPressed: () {
                               setState(() {
@@ -591,9 +590,9 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                               });
                             },
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 6),
                           Container(
-                            width: 80,
+                            width: 60,
                             child: SliderTheme(
                               data: SliderThemeData(
                                 trackHeight: 2,

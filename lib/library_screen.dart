@@ -3,6 +3,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'album_view.dart';
 import 'services/playlist_generator_service.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb if needed
+import 'package:image_picker/image_picker.dart'; // Import image_picker
+import 'dart:io'; // Import for File
+import 'package:file_picker/file_picker.dart'; // Import file_picker
+import 'dart:ui'; // Import for BackdropFilter
+import 'package:flutter/services.dart'; // Import for PointerEvent
 
 class LibraryScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -20,6 +25,9 @@ class LibraryScreen extends StatefulWidget {
 class _LibraryScreenState extends State<LibraryScreen> {
   bool _isGridView = true;
   String? _currentUserId;
+  File? _playlistCoverImage; // Variable to hold the selected image
+  Map<String, dynamic>? _selectedPlaylist; // Variable to hold the selected playlist for deletion
+  bool _isMenuVisible = false; // Track visibility of the context menu
 
   @override
   void initState() {
@@ -54,7 +62,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  void _showCreatePlaylistDialog() {
+  Future<void> _showCreatePlaylistDialog() async {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -63,108 +74,81 @@ class _LibraryScreenState extends State<LibraryScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          child: Container(
+            width: 500,
+            height: 500,
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(24.0),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                  // Header
                 const Text(
                   'Create Playlist',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                      fontSize: 24,
                     fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                _buildCreateOption(
-                  context,
-                  'Your Playlist',
-                  Icons.playlist_add,
-                  () => _createCustomPlaylist(),
-                ),
-                const SizedBox(height: 16),
-                _buildCreateOption(
-                  context,
-                  'AI Playlist',
-                  Icons.auto_awesome,
-                  () => _createAIPlaylist(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCreateOption(
-    BuildContext context,
-    String title,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.white.withOpacity(0.05),
-        ),
-        child: Row(
+                  const SizedBox(height: 32),
+                  
+                  // Main content row
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Image selection container
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          width: 150,  // Larger image container
+                          height: 150, // Square aspect ratio
+                          decoration: BoxDecoration(
+                            color: Colors.grey[800],
+                            borderRadius: BorderRadius.circular(8),
+                            image: _playlistCoverImage != null
+                                ? DecorationImage(
+                                    image: FileImage(_playlistCoverImage!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: _playlistCoverImage == null
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(
+                                      Icons.add_photo_alternate,
+                                      color: Colors.white70,
+                                      size: 40,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Choose photo',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Text fields column
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: Colors.white),
-            const SizedBox(width: 16),
-            Text(
-              title,
+                            TextField(
+                              controller: nameController,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
               ),
-            ),
-            const Spacer(),
-            const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _createCustomPlaylist() async {
-    final TextEditingController nameController = TextEditingController();
-    
-    final String? playlistName = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: const Color(0xFF1E2329),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'New Playlist',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nameController,
-                  style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
-                    hintText: 'Playlist name',
+                                hintText: 'Add a name',
                     hintStyle: TextStyle(color: Colors.grey),
                     enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: Colors.grey),
@@ -175,6 +159,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                            TextField(
+                              controller: descriptionController,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                hintText: 'Add an optional description',
+                                hintStyle: TextStyle(color: Colors.grey),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.grey),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const Spacer(),
+                  
+                  // Bottom buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -182,50 +193,111 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       onPressed: () => Navigator.pop(context),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
                       onPressed: () {
-                        Navigator.pop(context, nameController.text);
+                          Navigator.pop(context);
+                          _createPlaylist(
+                            nameController.text,
+                            descriptionController.text,
+                          );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
-                      ),
-                      child: const Text('Create'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: const Text(
+                          'Create',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                     ),
                   ],
                 ),
               ],
+              ),
             ),
           ),
         );
       },
     );
+  }
 
-    if (playlistName != null && playlistName.isNotEmpty) {
-      final client = Supabase.instance.client;
-      final session = client.auth.currentSession;
-      if (session?.user == null) {
-        print('Error: No active session found');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please login to create a playlist')),
-        );
-        return;
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null) {
+      final selectedFilePath = result.files.single.path!;
+      print("Selected file path: $selectedFilePath"); // Debug print
+
+      // Check if the file exists
+      final file = File(selectedFilePath);
+      if (await file.exists()) {
+        setState(() {
+          _playlistCoverImage = file;
+        });
+        print("Image set successfully: ${file.path}"); // Debug print
+      } else {
+        print("File does not exist: $selectedFilePath"); // Debug print
       }
+    } else {
+      print("No file selected."); // Debug print
+    }
+  }
+
+  Future<void> _createPlaylist(String playlistName, String description) async {
+    if (playlistName.isNotEmpty && _currentUserId != null) {
+      final client = Supabase.instance.client;
       try {
+        String imageUrl = _playlistCoverImage != null
+            ? await _uploadImage(_playlistCoverImage!) // Upload image if selected
+            : 'https://path.to/default/playlist/image.jpg'; // Default image
+
         await client.from('playlist').insert({
           'playlist_name': playlistName,
-          'user_id': session!.user.id,
-          'image_url': 'https://path.to/default/playlist/image.jpg',
+          'description': description, // Add description to the playlist
+          'user_id': _currentUserId!,
+          'image_url': imageUrl,
         });
         setState(() {}); // Refresh the list
       } catch (e) {
         print('Error creating playlist: $e');
       }
     }
+  }
+
+  Future<String> _uploadImage(File image) async {
+    // Upload the image to Supabase Storage and return the public URL
+    final fileName = image.path.split('/').last; // Get the file name
+    final response = await Supabase.instance.client.storage
+        .from('playlist_covers') // Replace with your bucket name
+        .upload(fileName, image);
+
+    // Check if there was an error during the upload
+    // if (response.error != null) {
+    //   throw Exception('Error uploading image: ${response.error!.message}');
+    // }
+
+    // Get the public URL
+    final publicUrl = Supabase.instance.client.storage
+        .from('playlist_covers') // Replace with your bucket name
+        .getPublicUrl(fileName);
+
+    return publicUrl; // Return the public URL
   }
 
   // Add helper function to parse duration from "mm:ss" to seconds.
@@ -447,6 +519,59 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  void _showContextMenu(BuildContext context, Map<String, dynamic> playlist, Offset position) {
+    setState(() {
+      _selectedPlaylist = playlist;
+    });
+
+    // Show the context menu at the cursor position
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, 0, 0),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'delete',
+          child: Text('Delete Playlist'),
+        ),
+        const PopupMenuItem<String>(
+          value: 'cancel',
+          child: Text('Cancel'),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'delete') {
+        _deletePlaylist();
+      }
+    });
+  }
+
+  void _deletePlaylist() async {
+    if (_selectedPlaylist != null) {
+      final response = await widget.supabaseClient
+          .from('playlist')
+          .delete()
+          .eq('id', _selectedPlaylist!['id']);
+
+      if (response != null && response.error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Playlist deleted successfully!')),
+        );
+        setState(() {
+          _isMenuVisible = false;
+        });
+      } else {
+        String errorMessage = response?.error?.message ?? 'Unknown error occurred.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting playlist: $errorMessage')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No playlist selected for deletion.')),
+      );
+    }
+  }
+
   Widget _buildGridView(List<Map<String, dynamic>> playlists) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
@@ -476,109 +601,121 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildPlaylistCard(Map<String, dynamic> playlist) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AlbumView(
-              album: playlist,
-              supabaseClient: widget.supabaseClient,
-              onSongSelected: (song) {
-                // ...handle song selection...
-                print("Song selected: $song");
-              },
-              currentlyPlayingSong: widget.currentlyPlayingSong,
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        // Use globalPosition to get the correct position relative to the screen
+        _showContextMenu(context, playlist, details.globalPosition);
+      }, // Show context menu on right-click
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AlbumView(
+                album: playlist,
+                supabaseClient: widget.supabaseClient,
+                onSongSelected: (song) {
+                  // ...handle song selection...
+                  print("Song selected: $song");
+                },
+                currentlyPlayingSong: widget.currentlyPlayingSong,
+              ),
             ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
           ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                  image: DecorationImage(
-                    image: NetworkImage(playlist['image_url'] ?? ''),
-                    fit: BoxFit.cover,
-                    onError: (_, __) {},
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                    image: DecorationImage(
+                      image: NetworkImage(playlist['image_url'] ?? ''),
+                      fit: BoxFit.cover,
+                      onError: (_, __) {},
+                    ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                playlist['playlist_name'] ?? 'Unnamed Playlist',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  playlist['playlist_name'] ?? 'Unnamed Playlist',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildPlaylistListItem(Map<String, dynamic> playlist) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AlbumView(
-              album: playlist,
-              supabaseClient: widget.supabaseClient,
-              onSongSelected: (song) {
-                // ...handle song selection...
-                print("Song selected: $song");
-              },
-              currentlyPlayingSong: widget.currentlyPlayingSong,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.all(8),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              image: DecorationImage(
-                image: NetworkImage(playlist['image_url'] ?? ''),
-                fit: BoxFit.cover,
-                onError: (_, __) {},
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        // Use globalPosition to get the correct position relative to the screen
+        _showContextMenu(context, playlist, details.globalPosition);
+      }, // Show context menu on right-click
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AlbumView(
+                album: playlist,
+                supabaseClient: widget.supabaseClient,
+                onSongSelected: (song) {
+                  // ...handle song selection...
+                  print("Song selected: $song");
+                },
+                currentlyPlayingSong: widget.currentlyPlayingSong,
               ),
             ),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
           ),
-          title: Text(
-            playlist['playlist_name'] ?? 'Unnamed Playlist',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(8),
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                image: DecorationImage(
+                  image: NetworkImage(playlist['image_url'] ?? ''),
+                  fit: BoxFit.cover,
+                  onError: (_, __) {},
+                ),
+              ),
             ),
+            title: Text(
+              playlist['playlist_name'] ?? 'Unnamed Playlist',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            trailing: const Icon(Icons.more_vert, color: Colors.white),
           ),
-          trailing: const Icon(Icons.more_vert, color: Colors.white),
         ),
       ),
     );
@@ -586,93 +723,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        // Header with view toggle and create button
-        Container(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Your Playlists',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Row(
+        Column(
+          children: [
+            // Header with view toggle and create button
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      _isGridView ? Icons.view_list : Icons.grid_view,
+                  const Text(
+                    'Your Playlists',
+                    style: TextStyle(
                       color: Colors.white,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isGridView = !_isGridView;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    onPressed: _showCreatePlaylistDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Create Playlist'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // Playlists content
-        Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _fetchPlaylists(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              
-              if (snapshot.hasError) {
-                return const Center(
-                  child: Text(
-                    'Error loading playlists',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                );
-              }
-
-              final playlists = snapshot.data ?? [];
-              
-              if (playlists.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Row(
                     children: [
-                      const Icon(
-                        Icons.playlist_add,
-                        color: Colors.grey,
-                        size: 64,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No playlists yet',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
+                      IconButton(
+                        icon: Icon(
+                          _isGridView ? Icons.view_list : Icons.grid_view,
+                          color: Colors.white,
                         ),
+                        onPressed: () {
+                          setState(() {
+                            _isGridView = !_isGridView;
+                          });
+                        },
                       ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
                         onPressed: _showCreatePlaylistDialog,
-                        child: Text('Create Your First Playlist'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Playlist'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
@@ -680,15 +766,111 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ],
                   ),
-                );
-              }
+                ],
+              ),
+            ),
 
-              return _isGridView
-                  ? _buildGridView(playlists)
-                  : _buildListView(playlists);
-            },
-          ),
+            // Playlists content
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _fetchPlaylists(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text(
+                        'Error loading playlists',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    );
+                  }
+
+                  final playlists = snapshot.data ?? [];
+                  if (playlists.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.playlist_add,
+                            color: Colors.grey,
+                            size: 64,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No playlists yet',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: _showCreatePlaylistDialog,
+                            child: Text('Create Your First Playlist'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return _isGridView
+                      ? _buildGridView(playlists)
+                      : _buildListView(playlists);
+                },
+              ),
+            ),
+          ],
         ),
+
+        // Context menu for deleting playlist
+        if (_isMenuVisible)
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isMenuVisible = false;
+                });
+              },
+              child: Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Options',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: _deletePlaylist,
+                          child: const Text('Delete Playlist'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

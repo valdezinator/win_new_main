@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http; // NEW import
 import 'dart:convert'; // NEW import
 import 'package:flutter_svg/flutter_svg.dart'; // Add this import
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -555,7 +556,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       supabaseClient: supabaseClient,
                       currentlyPlayingSong: _currentSong,
                     ),
-                    const Center(child: Text('Profile', style: TextStyle(color: Colors.white))),
+                    ProfileScreen(supabaseClient: supabaseClient),
                   ],
                 ),
               ),
@@ -929,62 +930,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              // Text overlay at the bottom
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
+              // Gradient overlay for better text visibility
+              Positioned.fill(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
+                      begin: Alignment.center,
+                      end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(0.7),
                         Colors.transparent,
+                        Colors.black.withOpacity(0.7),
                       ],
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        album['title'] ?? 'Unknown',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          shadows: [
-                            Shadow(
-                              offset: const Offset(0, 1),
-                              blurRadius: 3,
-                              color: Colors.black.withOpacity(0.5),
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Title and artist text
+              Positioned(
+                bottom: 12,
+                left: 12,
+                right: 12,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      album['title'] ?? 'Unknown',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 3,
+                            color: Colors.black,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        album['artist'] ?? 'Various Artists',
-                        style: TextStyle(
-                          color: Colors.grey[300],
-                          fontSize: 12,
-                          shadows: [
-                            Shadow(
-                              offset: const Offset(0, 1),
-                              blurRadius: 3,
-                              color: Colors.black.withOpacity(0.5),
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      album['artist'] ?? 'Various Artists',
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 12,
+                        shadows: [
+                          Shadow(
+                            offset: const Offset(0, 1),
+                            blurRadius: 3,
+                            color: Colors.black,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ],
