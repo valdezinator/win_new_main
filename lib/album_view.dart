@@ -280,101 +280,68 @@ class _AlbumViewState extends State<AlbumView> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Album Cover with enhanced hover effect
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            onEnter: (_) => setState(() => isPlayButtonHovered = true),
-            onExit: (_) => setState(() => isPlayButtonHovered = false),
-            child: Stack(
-              children: [
-                _buildAlbumCover(),
-                // Play button overlay
-                if (isPlayButtonHovered)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.black.withOpacity(0.5),
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.green,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.green.withOpacity(0.4),
-                                blurRadius: 20,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 48,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 32),
-          // Album Info with refined typography
+          _buildAlbumCover(),
+          const SizedBox(width: 24),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  widget.album['category']?.toUpperCase() ?? 'ALBUM',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2,
+                  widget.album['category'] ?? 'ALBUM', // Use category or default to ALBUM
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
                   widget.album['playlist_name'] ?? widget.album['title'] ?? 'Unknown Album',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 56,
+                    fontSize: 28, // Reduced from 36
                     fontWeight: FontWeight.bold,
-                    height: 1.1,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.album['artist'] ?? 'Various Artists',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Text(
-                      widget.album['artist'] ?? 'Unknown Artist',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                    ElevatedButton.icon(
+                      onPressed: _playAll,
+                      icon: const Icon(Icons.play_arrow, color: Colors.black),
+                      label: const Text('Play All', style: TextStyle(color: Colors.black)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
                       ),
                     ),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      width: 4,
-                      height: 4,
-                      decoration: const BoxDecoration(
-                        color: Colors.white70,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Text(
-                      '${songs.length} songs',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
-                      ),
+                    const SizedBox(width: 16),
+                    _buildDownloadButton(),
+                    const SizedBox(width: 16),
+                    _buildAlbumMoreOptionsMenu(),
+                    const Spacer(), // Pushes queue button to the right
+                    IconButton(
+                      icon: const Icon(Icons.queue_music, color: Colors.white),
+                      tooltip: 'Show Queue',
+                      onPressed: () {
+                        setState(() {
+                          showQueue = !showQueue;
+                        });
+                      },
                     ),
                   ],
                 ),
@@ -1013,161 +980,81 @@ class _AlbumViewState extends State<AlbumView> {
     return Scaffold(
       body: Stack(
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              color:  Color(0xFF0C0F14),  // Solid dark background
-            ),
-            child: DecoratedBox(
+          // Background Gradient
+          Positioned.fill(
+            child: Container(
               decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topLeft,
-                  radius: 1.8,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                   colors: [
-                    dominantColor.withOpacity(0.08),
-                    Colors.transparent,
+                    dominantColor.withOpacity(0.6),
+                    Colors.black.withOpacity(0.8),
+                    Colors.black,
                   ],
-                  stops: const [0.0, 0.8],
-                ),
-              ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.bottomRight,
-                    radius: 1.8,
-                    colors: [
-                      (_palette?.vibrantColor?.color ?? dominantColor).withOpacity(0.05),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.8],
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Row(
-                      children: [
-                        // Navigation Sidebar
-                        SizedBox(
-                          width: 232,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 108),
-                            child: Material(
-                              elevation: 8,
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(15),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.1),
-                                    width: 1,
-                                  ),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.white.withOpacity(0.1),
-                                      Colors.white.withOpacity(0.05),
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const SizedBox(height: 40),
-                                    _buildNavItem(Icons.home, 'Home'),
-                                    _buildNavItem(Icons.search, 'Search'),
-                                    _buildNavItem(Icons.library_music, 'Library'),
-                                    _buildNavItem(Icons.person, 'Profile'),
-                                    const Spacer(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Main content area
-                        Expanded(
-                          child: Column(
-                            children: [
-                              // Back button row at top
-                              Container(
-                                padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
-                                child: Row(
-                                  children: [
-                                    InkWell(
-                                      onTap: () => Navigator.pop(context),
-                                      borderRadius: BorderRadius.circular(20),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        child: const Row(
-                                          children: [
-                                            Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Back',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              
-                              // Content area
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  physics: const ClampingScrollPhysics(),
-                                  child: Column(
-                                    children: [
-                                      _buildAlbumHeader(),
-                                      _buildSongList(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Music player overlay at bottom in album view
-                    if (_currentSong != null)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Show queue if visible
-                            if (showQueue)
-                              QueueList(
-                                currentSong: _currentSong!,
-                                onClose: () => _toggleQueue(false),
-                              ),
-                            // Music player
-                            MusicPlayer(
-                              key: ValueKey(_currentSong!['id']),
-                              song: _currentSong!,
-                              showQueue: showQueue,
-                              onQueueToggle: _toggleQueue,  // Add this line
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
+                  stops: const [0.0, 0.3, 0.7],
                 ),
               ),
             ),
           ),
+          // Main Scrollable Content
+          CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                pinned: true,
+                expandedHeight: 300.0, // Adjust as needed
+                automaticallyImplyLeading: false, // Remove default back button
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildAlbumHeader(),
+                ),
+                leading: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_back, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildSongList(),
+              ),
+            ],
+          ),
+
+          // Queue List (conditionally shown)
+          if (showQueue && _currentSong != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight, // Adjust top to be below app bar
+              right: 0,
+              bottom: widget.currentlyPlayingSong != null ? 80.0 : 0, // Space for global player
+              child: QueueList(
+                currentSong: _currentSong!,
+                onClose: () => setState(() => showQueue = false),
+                onSongSelected: (song) {
+                  // When a song is selected from the queue, play it
+                  // and ensure the existing queue context is maintained.
+                  final songWithQueue = {
+                    ...Map<String, dynamic>.from(song),
+                    'queue': _currentSong!['queue'] ?? [], // Preserve the original queue
+                  };
+                  widget.onSongSelected(songWithQueue); // Call the main play function
+                  setState(() {
+                    _currentSong = songWithQueue; // Update local _currentSong
+                    currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
+                  });
+                },
+              ),
+            ),
         ],
       ),
     );

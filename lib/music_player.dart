@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';  // Add this import
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'dart:math';
-import 'dart:ui'; // Add this import
+import 'dart:ui';
+import 'dart:async';
 import 'services/audio_service.dart';
+import 'services/jam_session_service.dart';
+import 'widgets/jam_session_indicator.dart';
 
 class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
@@ -25,6 +28,7 @@ class MusicPlayer extends StatefulWidget {
 
 class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStateMixin {
   final AudioService _audioService = AudioService();
+  final JamSessionService _jamSessionService = JamSessionService(); // Add JamSessionService
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
   bool isInLibrary = true;
@@ -36,8 +40,11 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   late AnimationController _animationController;
   bool isPlaying = false;
   FocusNode? _focusNode;
+  bool _isInJamSession = false; // Add flag for jam session status
 
-  @override
+  // Timer for periodic jam session updates
+  Timer? _jamSessionUpdateTimer;
+    @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
@@ -47,6 +54,65 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
     );
     _setupAudioPlayer();
     _updatePaletteGenerator();
+    
+    // Check jam session status and listen for changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isInJamSession = _jamSessionService.isInSession;
+      if (_isInJamSession && mounted) {
+        setState(() {});
+        
+        // Start periodic updates if we're the host
+        if (_jamSessionService.isHost) {
+          _startJamSessionUpdates();
+        }
+      }
+      
+      // Subscribe to jam session changes
+      _jamSessionService.sessionStream.listen((session) {
+        if (mounted) {
+          setState(() {
+            _isInJamSession = session != null;
+          });
+            // If in a session and not the host, sync with host's playback
+          if (_isInJamSession && !_jamSessionService.isHost && session != null) {
+            // Sync playback with the host
+            final currentSongId = session['current_song'];
+            final positionMs = session['position_ms'] ?? 0;
+            final isSessionPlaying = session['is_playing'] ?? false;
+            final queue = session['queue'];
+            
+            if (currentSongId != null && queue != null) {
+              // Find the song in the queue
+              final songIndex = (queue as List).indexWhere((song) => song['id'] == currentSongId);
+              if (songIndex != -1) {
+                // Play the song
+                final songToPlay = Map<String, dynamic>.from(queue[songIndex]);
+                songToPlay['queue'] = queue;
+                
+                // Only change song if it's different from current
+                if (widget.song['id'] != currentSongId) {
+                  _audioService.playSong(songToPlay);
+                  
+                  // Seek to position
+                  if (positionMs > 0) {
+                    _audioService.player.seek(Duration(milliseconds: positionMs));
+                  }
+                }
+                
+                // Match play state
+                if (isPlaying != isSessionPlaying) {
+                  if (isSessionPlaying) {
+                    _audioService.play();
+                  } else {
+                    _audioService.pause();
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    });
   }
 
   Future<void> _setupAudioPlayer() async {
@@ -67,12 +133,27 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
     // Listen to player state changes
     _audioService.player.playerStateStream.listen((playerState) {
       if (mounted) {
-        setState(() {
-          isPlaying = playerState.playing;
-          if (playerState.processingState == ProcessingState.completed) {
-            currentPosition = Duration.zero;
-          }
-        });
+        // setState(() { // Original setState call
+        //   isPlaying = playerState.playing;
+        //   if (playerState.processingState == ProcessingState.completed) {
+        //     currentPosition = Duration.zero; // This was potentially problematic if completion logic relies on old position
+        //     _handleSongCompletion();
+        //   }
+        // });
+        // Revised logic to handle completion more cleanly
+        final wasPlaying = isPlaying;
+        final newIsPlaying = playerState.playing;
+        if (wasPlaying != newIsPlaying) {
+          setState(() {
+            isPlaying = newIsPlaying;
+          });
+        }
+        if (playerState.processingState == ProcessingState.completed) {
+          // Don't reset currentPosition to zero here immediately,
+          // let the new song load and update its duration/position.
+          // If it's the same song repeating, seek(Duration.zero) will handle it.
+          _handleSongCompletion();
+        }
       }
     });
 
@@ -99,8 +180,11 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
 
   void _handleSongCompletion() {
     if (isRepeatEnabled) {
-      _audioService.player.seek(Duration.zero);
-      _audioService.player.play();
+      // Replay the current song, ensuring its queue context is maintained.
+      // Create a new map to avoid modifying the original widget.song map.
+      final songToReplay = Map<String, dynamic>.from(widget.song);
+      // No need to call _audioService.player.seek(Duration.zero) if playSong handles it
+      _audioService.playSong(songToReplay); 
     } else if (isShuffleEnabled) {
       _playRandomSong();
     } else {
@@ -109,43 +193,64 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   }
 
   void _playRandomSong() {
-    final queue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (queue.isEmpty) return;
+    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
+    if (currentQueue.isEmpty) return;
 
     final random = Random();
-    final currentIndex = queue.indexWhere((song) => song['id'] == widget.song['id']);
-    int nextIndex;
+    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
     
-    do {
-      nextIndex = random.nextInt(queue.length);
-    } while (nextIndex == currentIndex && queue.length > 1);
+    if (currentQueue.length == 1 && currentIndex != -1) {
+        // Only one song in queue, replay if shuffle is on (and repeat is off)
+        final songToReplay = Map<String, dynamic>.from(widget.song);
+        _audioService.playSong(songToReplay);
+        return;
+    }
+    if (currentQueue.length <= 1) return; // Not enough songs to shuffle to a different one
 
-    widget.song['onSongSelected']?.call(queue[nextIndex]);
+    int nextIndex;
+    do {
+      nextIndex = random.nextInt(currentQueue.length);
+    } while (nextIndex == currentIndex); // Ensure it's a different song
+
+    final Map<String, dynamic> nextRandomSongDetails = Map<String, dynamic>.from(currentQueue[nextIndex]);
+    final Map<String, dynamic> songToPlay = {
+      ...nextRandomSongDetails,
+      'queue': currentQueue, // Pass the full original queue
+    };
+    _audioService.playSong(songToPlay);
   }
 
   void _playNextSong() {
-    final queue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (queue.isEmpty) return;
+    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
+    if (currentQueue.isEmpty) return;
 
-    final currentIndex = queue.indexWhere((song) => song['id'] == widget.song['id']);
-    if (currentIndex < queue.length - 1) {
-      final nextSong = queue[currentIndex + 1];
-      // Preserve the queue in the next song
-      nextSong['queue'] = queue;
-      _audioService.playSong(nextSong);
+    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
+    
+    if (currentIndex != -1 && currentIndex < currentQueue.length - 1) {
+      final Map<String, dynamic> nextSongDetails = Map<String, dynamic>.from(currentQueue[currentIndex + 1]);
+      final Map<String, dynamic> songToPlay = {
+        ...nextSongDetails,
+        'queue': currentQueue, // Pass the full current queue
+      };
+      _audioService.playSong(songToPlay);
     }
+    // If at the end of the queue and not repeating, playback will stop.
+    // Playlist repeat logic (repeating the whole queue) would go here if isRepeatEnabled had a playlist mode.
   }
 
   void _playPreviousSong() {
-    final queue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (queue.isEmpty) return;
+    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
+    if (currentQueue.isEmpty) return;
 
-    final currentIndex = queue.indexWhere((song) => song['id'] == widget.song['id']);
-    if (currentIndex > 0) {
-      final previousSong = queue[currentIndex - 1];
-      // Preserve the queue in the previous song
-      previousSong['queue'] = queue;
-      _audioService.playSong(previousSong);
+    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
+
+    if (currentIndex > 0) { // Ensure there is a previous song
+      final Map<String, dynamic> prevSongDetails = Map<String, dynamic>.from(currentQueue[currentIndex - 1]);
+      final Map<String, dynamic> songToPlay = {
+        ...prevSongDetails,
+        'queue': currentQueue, // Pass the full current queue
+      };
+      _audioService.playSong(songToPlay);
     }
   }
 
@@ -166,17 +271,60 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
       }
     });
   }
-
   void _handlePlayPause() {
     _audioService.togglePlayPause();
+    
+    // Update jam session if host
+    if (_isInJamSession && _jamSessionService.isHost) {
+      _updateJamSessionPlayback();
+    }
   }
 
   void _handleNext() {
     _playNextSong();
+    
+    // Update jam session if host
+    if (_isInJamSession && _jamSessionService.isHost) {
+      _updateJamSessionPlayback();
+    }
   }
 
   void _handlePrevious() {
     _playPreviousSong();
+    
+    // Update jam session if host
+    if (_isInJamSession && _jamSessionService.isHost) {
+      _updateJamSessionPlayback();
+    }
+  }
+  
+  // Method to update jam session playback state
+  void _updateJamSessionPlayback() {
+    if (!_jamSessionService.isHost || !_isInJamSession) return;
+    
+    _jamSessionService.updateSessionPlayback(
+      widget.song,
+      currentPosition.inMilliseconds,
+      isPlaying
+    );
+  }
+
+  // Start periodic jam session updates
+  void _startJamSessionUpdates() {
+    _jamSessionUpdateTimer?.cancel();
+    
+    if (_isInJamSession && _jamSessionService.isHost) {
+      // Update every 5 seconds to keep participants in sync
+      _jamSessionUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        _updateJamSessionPlayback();
+      });
+    }
+  }
+  
+  // Stop periodic updates
+  void _stopJamSessionUpdates() {
+    _jamSessionUpdateTimer?.cancel();
+    _jamSessionUpdateTimer = null;
   }
 
   @override
@@ -197,6 +345,7 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   void dispose() {
     _focusNode?.dispose();
     _animationController.dispose();
+    _stopJamSessionUpdates(); // Ensure timer is cancelled
     super.dispose();
   }
 
@@ -283,6 +432,42 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
         ),
       ),
     );
+  }
+
+  // Handle network reconnection for jam sessions
+  Future<void> _handleReconnection() async {
+    if (!_isInJamSession) return;
+    
+    try {
+      // Check if session is still active
+      final sessionId = _jamSessionService.sessionId;
+      if (sessionId == null) {
+        _stopJamSessionUpdates();
+        return;
+      }
+      
+      final isSessionActive = await _jamSessionService.checkSessionActive(sessionId);
+      if (!isSessionActive) {
+        // Session is no longer active, leave it
+        await _jamSessionService.endSession();
+        setState(() {
+          _isInJamSession = false;
+        });
+        _stopJamSessionUpdates();
+        
+        // Inform the user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You\'ve been disconnected from the Jam Session')),
+          );
+        }
+      } else if (_jamSessionService.isHost) {
+        // If host, send an update to ensure participants are in sync
+        _updateJamSessionPlayback();
+      }
+    } catch (e) {
+      print('Error handling reconnection: $e');
+    }
   }
 
   @override
@@ -494,12 +679,19 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                                     inactiveTrackColor: Colors.grey[800],
                                     thumbColor: const Color.fromARGB(255, 26, 107, 37),
                                     overlayColor: Colors.white.withOpacity(0.2),
-                                  ),
-                                  child: Slider(
+                                  ),                                  child: Slider(
                                     value: currentPosition.inSeconds.toDouble(),
                                     max: totalDuration.inSeconds.toDouble(),
                                     onChanged: (value) {
                                       _audioService.player.seek(Duration(seconds: value.toInt()));
+                                      
+                                      // Update jam session if host
+                                      if (_isInJamSession && _jamSessionService.isHost) {
+                                        // Use a small delay to ensure seeking is complete
+                                        Future.delayed(const Duration(milliseconds: 100), () {
+                                          _updateJamSessionPlayback();
+                                        });
+                                      }
                                     },
                                   ),
                                 ),
@@ -624,9 +816,13 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
               ),
             ),
           ),
-        ),
-        // If lyrics overlay is toggled, display it on top of the MusicPlayer UI.
+        ),        // If lyrics overlay is toggled, display it on top of the MusicPlayer UI.
         if (showLyrics) _buildLyricsOverlay(),
+        // Jam Session indicator
+        if (_isInJamSession) JamSessionIndicator(
+          isHost: _jamSessionService.isHost,
+          hostName: _jamSessionService.currentSession?['host_name'] ?? 'Unknown',
+        ),
       ],
     );
   }
