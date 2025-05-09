@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
 import 'album_view.dart';
+import 'browse_screen.dart';
+import 'library_screen.dart';
+import 'profile_screen.dart';
 import 'services/audio_service.dart';
 import 'layouts/main_layout.dart';
 import 'layouts/content_view.dart';
@@ -63,26 +66,75 @@ class _MainAppState extends State<MainApp> {
     Widget content;
     int currentIndex = 0; // Default to home tab
 
-    if (_currentContentType == ContentType.home) {
-      // Show the home screen
-      content = const HomeScreen();
-    } else {
-      // For album/playlist views, use ContentView
-      content = ContentView(
-        initialContentType: _currentContentType,
-        contentData: _contentData,
-        supabaseClient: supabaseClient,
-        onSongSelected: _playSong,
-        currentlyPlayingSong: _currentSong,
-        audioService: _audioService,
-        onBackPressed: () {
-          // Handle back navigation
-          setState(() {
-            _currentContentType = ContentType.home;
-            _contentData = null;
-          });
-        },
-      );
+    // Set the current index based on content type
+    switch (_currentContentType) {
+      case ContentType.home:
+        currentIndex = 0;
+        break;
+      case ContentType.search:
+        currentIndex = 1;
+        break;
+      case ContentType.library:
+        currentIndex = 2;
+        break;
+      case ContentType.profile:
+        currentIndex = 3;
+        break;
+      default:
+        // For album, artist, playlist, etc. keep the last selected tab
+        break;
+    }
+
+    // Determine which content to show based on content type
+    switch (_currentContentType) {
+      case ContentType.home:
+        // Show the home screen
+        content = const HomeScreen();
+        break;
+      case ContentType.search:
+        // Show the search/browse screen
+        content = BrowseScreen(
+          supabaseClient: supabaseClient,
+          onSongSelected: _playSong,
+          currentlyPlayingSong: _currentSong,
+        );
+        break;
+      case ContentType.library:
+        // Show the library screen
+        content = LibraryScreen(
+          supabaseClient: supabaseClient,
+          currentlyPlayingSong: _currentSong,
+        );
+        break;
+      case ContentType.profile:
+        // Show the profile screen
+        content = ProfileScreen(
+          supabaseClient: supabaseClient,
+        );
+        break;
+      case ContentType.album:
+      case ContentType.playlist:
+      case ContentType.artist:
+        // For album/playlist/artist views, use ContentView
+        content = ContentView(
+          initialContentType: _currentContentType,
+          contentData: _contentData,
+          supabaseClient: supabaseClient,
+          onSongSelected: _playSong,
+          currentlyPlayingSong: _currentSong,
+          audioService: _audioService,
+          onBackPressed: () {
+            // Handle back navigation
+            setState(() {
+              _currentContentType = ContentType.home;
+              _contentData = null;
+            });
+          },
+        );
+        break;
+      default:
+        // Default to home screen
+        content = const HomeScreen();
     }
 
     // Wrap everything in MainLayout to ensure consistent UI
@@ -92,10 +144,25 @@ class _MainAppState extends State<MainApp> {
       audioService: _audioService,
       onSongSelected: _playSong,
       onNavItemSelected: (index) {
-        // Handle navigation item selection
+        // Handle navigation item selection based on the index
         setState(() {
-          _currentContentType = ContentType.home;
-          _contentData = null;
+          switch (index) {
+            case 0: // Home
+              _currentContentType = ContentType.home;
+              break;
+            case 1: // Search
+              _currentContentType = ContentType.search;
+              break;
+            case 2: // Library
+              _currentContentType = ContentType.library;
+              break;
+            case 3: // Profile
+              _currentContentType = ContentType.profile;
+              break;
+            default:
+              _currentContentType = ContentType.home;
+          }
+          _contentData = null; // Reset content data when switching main sections
         });
       },
       showQueue: _showQueue,

@@ -24,11 +24,13 @@ import 'layouts/content_view.dart';
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
   final bool autoplay;
+  final int initialTabIndex;
 
   const HomeScreen({
     Key? key,
     this.initialSong,
     this.autoplay = false,
+    this.initialTabIndex = 0,
   }) : super(key: key);
 
   @override
@@ -50,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTabIndex);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {});  // Rebuild to update box colors

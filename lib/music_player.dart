@@ -498,8 +498,8 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    dominantColor.withOpacity(0.8),
-                    dominantColor.withOpacity(0.2),
+                    dominantColor.withOpacity(1),
+                    dominantColor.withOpacity(1),
                     Colors.black,
                   ],
                   stops: const [0.0, 0.4, 1.0],
