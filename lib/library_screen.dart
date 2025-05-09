@@ -12,10 +12,13 @@ import 'package:flutter/services.dart'; // Import for PointerEvent
 class LibraryScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
   final Map<String, dynamic>? currentlyPlayingSong;
+  final Function(Map<String, dynamic>)? onAlbumSelected;
+
   const LibraryScreen({
     Key? key,
     required this.supabaseClient,
     this.currentlyPlayingSong,
+    this.onAlbumSelected,
   }) : super(key: key);
 
   @override
@@ -33,31 +36,68 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _getCurrentUser();
-  }
+  }  Future<void> _getCurrentUser() async {
+    print("Checking current user session...");
+    // First check for current session
+    final session = Supabase.instance.client.auth.currentSession;
+    print("Session: $session");
+    final user = session?.user;
+    print("User from session: $user");
 
-  Future<void> _getCurrentUser() async {
-    final user = Supabase.instance.client.auth.currentUser ??
-        Supabase.instance.client.auth.currentSession?.user;
     if (user != null) {
+      print("Setting current user ID to: ${user.id}");
       setState(() {
         _currentUserId = user.id;
       });
+    } else {
+      print("No user session found");
+      // If no session, show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in to view your playlists'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
-
   Future<List<Map<String, dynamic>>> _fetchPlaylists() async {
     try {
-      if (_currentUserId == null) return [];
-      
-      final data = await widget.supabaseClient
-          .from('playlist')
-          .select('*, is_ai_generated') // include is_ai_generated column
-          .eq('user_id', _currentUserId!)
-          .order('playlist_name');
+      print("Fetching playlists for user: $_currentUserId");
+      if (_currentUserId == null) {
+        print("No current user ID, returning empty list");
+        return [];
+      }
 
-      return List<Map<String, dynamic>>.from(data);      
-    } catch (e) {
-      print('Unexpected error fetching playlists: $e');
+      print("Making Supabase query...");
+      final data = await widget.supabaseClient
+          .from('playlist')  // Changed back to 'playlist' as shown in policies
+          .select('id, playlist_name, image_url, user_id, description, created_at')
+          .eq('user_id', _currentUserId!)
+          .order('created_at', ascending: false);
+
+      print("Supabase response data: $data");
+
+      if (data != null) {
+        final playlists = List<Map<String, dynamic>>.from(data);
+        print("Found ${playlists.length} playlists");
+        return playlists;
+      }
+
+      print("No data returned from Supabase");
+      return [];
+    } catch (e, stackTrace) {
+      print('Error fetching playlists: $e');
+      print('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading playlists: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       return [];
     }
   }
@@ -92,7 +132,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Main content row
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,9 +222,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ],
                   ),
-                  
+
                   const Spacer(),
-                  
+
                   // Bottom buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -263,15 +303,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (playlistName.isNotEmpty && _currentUserId != null) {
       final client = Supabase.instance.client;
       try {
-        String imageUrl = _playlistCoverImage != null
-            ? await _uploadImage(_playlistCoverImage!) // Upload image if selected
-            : 'https://path.to/default/playlist/image.jpg'; // Default image
+        String imageUrl = '';
+        if (_playlistCoverImage != null) {
+          imageUrl = await _uploadImage(_playlistCoverImage!);
+        }
 
-        await client.from('playlist').insert({
+        await client.from('playlists').insert({  // Changed from 'playlist' to 'playlists'
           'playlist_name': playlistName,
-          'description': description, // Add description to the playlist
+          'description': description,
           'user_id': _currentUserId!,
           'image_url': imageUrl,
+          'created_at': DateTime.now().toIso8601String(),
         });
         setState(() {}); // Refresh the list
       } catch (e) {
@@ -312,7 +354,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _createAIPlaylist() async {
     final TextEditingController promptController = TextEditingController();
     final playlistGenerator = PlaylistGeneratorService(supabaseClient: widget.supabaseClient);
-    
+
     final String? prompt = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -420,10 +462,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       try {
         // Generate playlist
         final songs = await playlistGenerator.generatePlaylist(prompt);
-        
+
         // Pop the loading dialog before any potential early returns
         Navigator.of(context).pop();
-        
+
         if (songs.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not generate playlist. Please try a different prompt.')),
@@ -434,7 +476,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         // Generate description
         final analysis = playlistGenerator.analyzePrompt(prompt);
         final description = playlistGenerator.generatePlaylistDescription(analysis);
-        
+
         // Create playlist entry in the public.playlist table
         final user = Supabase.instance.client.auth.currentUser;
         if (user == null) {
@@ -548,7 +590,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _deletePlaylist() async {
     if (_selectedPlaylist != null) {
       final response = await widget.supabaseClient
-          .from('playlist')
+          .from('playlists')  // Changed from 'playlist' to 'playlists'
           .delete()
           .eq('id', _selectedPlaylist!['id']);
 
@@ -608,20 +650,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
       }, // Show context menu on right-click
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AlbumView(
-                album: playlist,
-                supabaseClient: widget.supabaseClient,
-                onSongSelected: (song) {
-                  // ...handle song selection...
-                  print("Song selected: $song");
-                },
-                currentlyPlayingSong: widget.currentlyPlayingSong,
+          if (widget.onAlbumSelected != null) {
+            // Use the callback to navigate to the album view
+            widget.onAlbumSelected!(playlist);
+          } else {
+            // Fallback to the old navigation method
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AlbumView(
+                  album: playlist,
+                  supabaseClient: widget.supabaseClient,
+                  onSongSelected: (song) {
+                    // ...handle song selection...
+                    print("Song selected: $song");
+                  },
+                  currentlyPlayingSong: widget.currentlyPlayingSong,
+                ),
               ),
-            ),
-          );
+            );
+          }
         },
         child: Container(
           decoration: BoxDecoration(

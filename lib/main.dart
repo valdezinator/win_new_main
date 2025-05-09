@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';  // Add this import
 import 'home_page.dart';
 import 'sign_in.dart';
+import 'main_app.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -45,11 +46,11 @@ class MyApp extends StatelessWidget {
   Future<Map<String, dynamic>> checkLoginState() async {
     final prefs = await SharedPreferences.getInstance();
     final accessToken = prefs.getString('access_token');
-    
+
     // Get last played song state
     final lastPlayedSong = prefs.getString('last_played_song');
     final wasPlaying = prefs.getBool('was_playing') ?? false;
-    
+
     return {
       'isLoggedIn': accessToken != null,
       'lastPlayedSong': lastPlayedSong != null ? Map<String, dynamic>.from(
@@ -78,13 +79,10 @@ class MyApp extends StatelessWidget {
               ),
             );
           }
-          
+
           final state = snapshot.data ?? {'isLoggedIn': false};
           if (state['isLoggedIn']) {
-            return HomeScreen(
-              initialSong: state['lastPlayedSong'],
-              autoplay: state['wasPlaying'],
-            );
+            return const MainApp();
           } else {
             return LoginScreen();
           }
@@ -132,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => const HomeScreen(),
+              builder: (context) => const MainApp(),
             ),
           );
         }
@@ -154,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ..headers.contentType = ContentType.html
         ..write('<html><body>You can now close this window.</body></html>');
       await request.response.close();
-      
+
       // Attempt to recover the session using the callback URL.
       debugPrint("Recovering session from callback: $callbackUrl");
       await Supabase.instance.client.auth.getSessionFromUrl(Uri.parse(callbackUrl));

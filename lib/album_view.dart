@@ -13,15 +13,19 @@ class AlbumView extends StatefulWidget {
   final Map<String, dynamic> album;
   final SupabaseClient supabaseClient;
   final Function(Map<String, dynamic>) onSongSelected;
-  final Map<String, dynamic>? currentlyPlayingSong;  // Add this parameter
+  final Map<String, dynamic>? currentlyPlayingSong;
+  final bool inMainLayout; // Flag to indicate if it's in the main layout
+  final VoidCallback? onBackPressed; // Callback for back navigation
 
   const AlbumView({
-    Key? key,
+    super.key,
     required this.album,
     required this.supabaseClient,
     required this.onSongSelected,
-    this.currentlyPlayingSong,  // Add this parameter
-  }) : super(key: key);
+    this.currentlyPlayingSong,
+    this.inMainLayout = false, // Default to false for backward compatibility
+    this.onBackPressed,
+  });
 
   @override
   _AlbumViewState createState() => _AlbumViewState();
@@ -87,32 +91,33 @@ class _AlbumViewState extends State<AlbumView> {
       });
     }
   }
-
   Future<void> _loadSongs() async {
     try {
-      print('Loading songs for album ID: ${widget.album['id']}');
-      
-      final bool isAIPlaylist = (widget.album['is_ai_generated'] ?? false) == true; // default false if missing
-      final String tableName = isAIPlaylist ? 'ai_playlists' : 'songs';
-      final String idField = isAIPlaylist ? 'playlist_id' : 'album_id';
-      
-      final response = await widget.supabaseClient
-          .from(tableName)
-          .select('*')  // Select all fields to ensure we have everything needed
-          .eq(idField, widget.album['id']);
-      
+      final isPlaylist = widget.album['playlist_name'] != null;
+
+      final response = isPlaylist
+          ? await widget.supabaseClient
+              .from('playlist_songs')
+              .select('*, songs_2!inner(*)')
+              .eq('playlist_id', widget.album['id'])
+              .order('added_at', ascending: false)
+          : await widget.supabaseClient
+              .from('songs_2')
+              .select()
+              .eq('album_id', widget.album['id']);
+
       print('Response from Supabase: $response');
-      
+
       // Validate audio URLs before setting state
       final validSongs = List<Map<String, dynamic>>.from(response).map((song) {
         print('Song ${song['title']} audio URL: ${song['audio_url']}');
         return song;
       }).toList();
-      
+
       setState(() {
         songs = validSongs;
         isLoading = false;
-        
+
         if (widget.currentlyPlayingSong != null) {
           currentPlayingIndex = songs.indexWhere(
             (song) => song['id'] == widget.currentlyPlayingSong!['id']
@@ -148,7 +153,7 @@ class _AlbumViewState extends State<AlbumView> {
       );
       return;
     }
-  
+
     try {
       // Format queue data first to ensure all songs have required fields
       final formattedQueue = songs.map((s) => {
@@ -174,12 +179,12 @@ class _AlbumViewState extends State<AlbumView> {
         'title': song['title'] ?? 'Unknown Title',
         'queue': formattedQueue, // Use the formatted queue
       };
-      
+
       print('Playing song with metadata: $songWithAlbumContext');
       print('Queue size: ${formattedQueue.length}');
-      
+
       widget.onSongSelected(songWithAlbumContext);
-      
+
       setState(() {
         _currentSong = songWithAlbumContext; // Store full context including queue
         currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
@@ -194,13 +199,13 @@ class _AlbumViewState extends State<AlbumView> {
 
   String _formatDuration(dynamic duration) {
     if (duration == null) return '0:00';
-    
+
     if (duration is String) {
       // If it's already in MM:SS format, return as is
       if (duration.toString().contains(':')) {
         return duration;
       }
-      
+
       // Try to parse as seconds if it's a numeric string
       try {
         final seconds = int.parse(duration);
@@ -215,7 +220,7 @@ class _AlbumViewState extends State<AlbumView> {
       final remainingSeconds = duration % 60;
       return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
     }
-    
+
     return '0:00';
   }
 
@@ -225,9 +230,8 @@ class _AlbumViewState extends State<AlbumView> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          const SizedBox(width: 16), // Left margin
           // Track number column
-          Container(
+          SizedBox(
             width: 30,
             child: const Text(
               "#",
@@ -245,7 +249,6 @@ class _AlbumViewState extends State<AlbumView> {
           const SizedBox(width: 16),
           // Title column
           const Expanded(
-            flex: 3,
             child: Text(
               "TITLE",
               style: TextStyle(
@@ -256,9 +259,9 @@ class _AlbumViewState extends State<AlbumView> {
             ),
           ),
           // Duration column
-          Container(
+          const SizedBox(
             width: 80,
-            child: const Text(
+            child: Text(
               "DURATION",
               style: TextStyle(
                 color: Colors.white70,
@@ -268,7 +271,7 @@ class _AlbumViewState extends State<AlbumView> {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48), // Space for more options
+          const SizedBox(width: 40), // Space for more options
         ],
       ),
     );
@@ -706,9 +709,8 @@ class _AlbumViewState extends State<AlbumView> {
           },
           child: Row(
             children: [
-              const SizedBox(width: 16),
               // Track Number
-              Container(
+              SizedBox(
                 width: 30,
                 child: Text(
                   '${entry.key + 1}',
@@ -743,9 +745,8 @@ class _AlbumViewState extends State<AlbumView> {
                 ),
               ),
               const SizedBox(width: 16),
-              // Title and Artist Column
+              // Title and Artist Column - Use Expanded to take available space
               Expanded(
-                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -773,7 +774,7 @@ class _AlbumViewState extends State<AlbumView> {
                 ),
               ),
               // Duration
-              Container(
+              SizedBox(
                 width: 80,
                 child: Text(
                   _formatDuration(entry.value['duration']),
@@ -786,7 +787,6 @@ class _AlbumViewState extends State<AlbumView> {
               ),
               // More options button
               _buildMoreOptionsMenu(entry.value),
-              const SizedBox(width: 16),
             ],
           ),
         ),
@@ -805,52 +805,56 @@ class _AlbumViewState extends State<AlbumView> {
           // Enhanced Playback Controls
           Container(
             margin: const EdgeInsets.symmetric(vertical: 24),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.play_arrow, color: Colors.white, size: 32),
+                      onPressed: _playAll,
+                    ),
                   ),
-                  child: IconButton(
-                    icon: const Icon(Icons.play_arrow, color: Colors.white, size: 32),
-                    onPressed: _playAll,
+                  const SizedBox(width: 32),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.1),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.favorite_border, color: Colors.white70, size: 24),
+                      onPressed: () {
+                        // TODO: Toggle favorite
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 32),
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.1),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.favorite_border, color: Colors.white70, size: 24),
-                    onPressed: () {
-                      // TODO: Toggle favorite
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                _buildDownloadButton(),
-                const SizedBox(width: 16),
-                _buildAlbumMoreOptionsMenu(),
-              ],
+                  const SizedBox(width: 16),
+                  _buildDownloadButton(),
+                  const SizedBox(width: 16),
+                  _buildAlbumMoreOptionsMenu(),
+                ],
+              ),
             ),
           ),
-          
+
           _buildColumnHeaders(),
-          
+
           // Songs List
           if (isLoading)
             const Center(child: CircularProgressIndicator())
@@ -864,7 +868,7 @@ class _AlbumViewState extends State<AlbumView> {
           else
             ...songs.asMap().entries.map((entry) {
               return _buildSongRow(entry);
-            }).toList(),
+            }),
         ],
       ),
     );
@@ -895,35 +899,41 @@ class _AlbumViewState extends State<AlbumView> {
       });
 
       await _downloadService.downloadAlbum(widget.album, songs);
-      
+
       setState(() {
         _isDownloaded = true;
         _totalDownloadProgress = 1.0;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Album downloaded successfully'),
-            ],
+      // Check if widget is still mounted before showing SnackBar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Album downloaded successfully'),
+              ],
+            ),
+            backgroundColor: Colors.black87,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
-          backgroundColor: Colors.black87,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to download album: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Check if widget is still mounted before showing SnackBar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download album: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (!_isDownloaded) {
         setState(() => _isDownloading = false);
@@ -937,7 +947,7 @@ class _AlbumViewState extends State<AlbumView> {
       height: 40,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: _isDownloaded 
+        color: _isDownloaded
           ? Colors.green.withOpacity(0.2)
           : Colors.white.withOpacity(0.1),
       ),
@@ -977,132 +987,110 @@ class _AlbumViewState extends State<AlbumView> {
   Widget build(BuildContext context) {
     final dominantColor = _palette?.dominantColor?.color ?? Colors.black;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Background Gradient
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    dominantColor.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
-                    Colors.black,
-                  ],
-                  stops: const [0.0, 0.3, 0.7],
-                ),
+    // Content to display in both standalone and main layout modes
+    Widget content = Stack(
+      children: [
+        // Background Gradient
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  dominantColor.withOpacity(0.6),
+                  Colors.black.withOpacity(0.8),
+                  Colors.black,
+                ],
+                stops: const [0.0, 0.3, 0.7],
               ),
             ),
           ),
-          // Main Scrollable Content
-          CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                pinned: true,
-                expandedHeight: 300.0, // Adjust as needed
-                automaticallyImplyLeading: false, // Remove default back button
-                flexibleSpace: FlexibleSpaceBar(
-                  background: _buildAlbumHeader(),
-                ),
-                leading: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
+        // Main Scrollable Content
+        CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              pinned: true,
+              expandedHeight: 300.0, // Adjust as needed
+              automaticallyImplyLeading: false, // Remove default back button
+              flexibleSpace: FlexibleSpaceBar(
+                background: _buildAlbumHeader(),
+              ),
+              leading: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: InkWell(
+                  onTap: () {
+                    if (widget.inMainLayout && widget.onBackPressed != null) {
+                      // Use the callback for in-app navigation
+                      widget.onBackPressed!();
+                    } else {
+                      // Use standard navigation for standalone view
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
                     ),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildSongList(),
-              ),
-            ],
-          ),
-
-          // Queue List (conditionally shown)
-          if (showQueue && _currentSong != null)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + kToolbarHeight, // Adjust top to be below app bar
-              right: 0,
-              bottom: widget.currentlyPlayingSong != null ? 80.0 : 0, // Space for global player
-              child: QueueList(
-                currentSong: _currentSong!,
-                onClose: () => setState(() => showQueue = false),
-                onSongSelected: (song) {
-                  // When a song is selected from the queue, play it
-                  // and ensure the existing queue context is maintained.
-                  final songWithQueue = {
-                    ...Map<String, dynamic>.from(song),
-                    'queue': _currentSong!['queue'] ?? [], // Preserve the original queue
-                  };
-                  widget.onSongSelected(songWithQueue); // Call the main play function
-                  setState(() {
-                    _currentSong = songWithQueue; // Update local _currentSong
-                    currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
-                  });
-                },
-              ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String text, {VoidCallback? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: onTap ?? () => Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+            SliverToBoxAdapter(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildSongList(),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.white.withOpacity(0.1),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.1),
-                Colors.white.withOpacity(0.05),
-              ],
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+      ],
+    );
+
+    // If we're in the main layout, wrap content in Material
+    // Otherwise, wrap it in a Scaffold
+    if (widget.inMainLayout) {
+      return Material(
+        // Use a transparent color to not affect the background gradient
+        color: Colors.transparent,
+        child: content,
+      );
+    } else {
+      return Scaffold(
+        body: Stack(
+          children: [
+            content,
+            // Queue List (conditionally shown)
+            if (showQueue && _currentSong != null)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + kToolbarHeight, // Adjust top to be below app bar
+                right: 0,
+                bottom: widget.currentlyPlayingSong != null ? 80.0 : 0, // Space for global player
+                child: QueueList(
+                  currentSong: _currentSong!,
+                  onClose: () => setState(() => showQueue = false),
+                  onSongSelected: (song) {
+                    // When a song is selected from the queue, play it
+                    // and ensure the existing queue context is maintained.
+                    final songWithQueue = {
+                      ...Map<String, dynamic>.from(song),
+                      'queue': _currentSong!['queue'] ?? [], // Preserve the original queue
+                    };
+                    widget.onSongSelected(songWithQueue); // Call the main play function
+                    setState(() {
+                      _currentSong = songWithQueue; // Update local _currentSong
+                      currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
+                    });
+                  },
                 ),
               ),
-            ],
-          ),
+          ],
         ),
-      ),
-    );
+      );
+    }
   }
 }

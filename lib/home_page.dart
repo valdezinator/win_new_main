@@ -18,6 +18,8 @@ import 'dart:convert'; // NEW import
 import 'package:flutter_svg/flutter_svg.dart'; // Add this import
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 import 'profile_screen.dart';
+import 'layouts/main_layout.dart';
+import 'layouts/content_view.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -58,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeLastPlayedSong();
     _initializeJamSessionService();
   }
-  
+
   // Initialize JamSessionService with the current user ID
   void _initializeJamSessionService() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -81,15 +83,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   @override
-  void dispose() async {
-    // Save current song state before disposing
-    if (_currentSong != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_played_song', json.encode(_currentSong));
-      await prefs.setBool('was_playing', _audioService.isPlaying);
-    }
-    _tabController.dispose();
+  void dispose() {
+    // Call super.dispose() first
     super.dispose();
+    _tabController.dispose();
+
+    // Save current song state after disposing
+    if (_currentSong != null) {
+      // Use a separate async function to handle the async operations
+      _saveSongState();
+    }
+  }
+
+  // Separate async method to save song state
+  Future<void> _saveSongState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_played_song', json.encode(_currentSong));
+    await prefs.setBool('was_playing', _audioService.isPlaying);
   }
 
   Future<List<Map<String, dynamic>>> fetchSongs() async {
@@ -414,6 +424,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+  // Method to navigate to album view using the ContentViewController
+  void _navigateToAlbum(Map<String, dynamic> album) {
+    // Use the ContentViewController to navigate to the album view
+    ContentViewController().navigateTo(
+      ContentType.album,
+      data: album,
+    );
+  }
+
   // Add this method to _HomeScreenState
   void _testPlaySong() {
     final testSong = {
@@ -482,140 +501,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0C0F14),
-      body: Stack(
-        children: [
-          // Main content row
-          Row(
-            children: [
-              // Navigation Sidebar Container
-              SizedBox(
-                width: 232, // 200 + 16 * 2 for margins
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 108), // Added bottom padding of 108px to account for music player height
-                  child: Material(
-                    elevation: 8,
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(15),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1), // Change from 0.1 to 0.05 for 5% opacity
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
-                          width: 1,
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withOpacity(0.1),
-                            Colors.white.withOpacity(0.05),
-                          ],
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 40),
-                          _buildNavItem(0, 'assets/icons/home_icon.svg', 'Home'),
-                          _buildNavItem(1, 'assets/icons/search_icon.svg', 'Search'),
-                          _buildNavItem(2, 'assets/icons/library_icon.svg', 'Library'),
-                          _buildNavItem(3, 'assets/icons/profile_icon.svg', 'Profile'),
-                          const Spacer(),
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Container(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _handleSignOut,  // Add sign out handler
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Sign Out',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Main content area
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildHomeContent(),
-                    BrowseScreen(
-                      supabaseClient: supabaseClient,
-                      onSongSelected: playSong,
-                      currentlyPlayingSong: _currentSong,
-                    ),
-                    LibraryScreen(
-                      supabaseClient: supabaseClient,
-                      currentlyPlayingSong: _currentSong,
-                    ),
-                    ProfileScreen(supabaseClient: supabaseClient),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Music Player
-          if (_currentSong != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: MusicPlayer(
-                key: ValueKey(_currentSong!['id']),
-                song: _currentSong!,
-                onQueueToggle: (show) => setState(() => showQueue = show),
-                showQueue: showQueue,
-              ),
-            ),
-
-          // Queue List (conditionally shown)
-          if (showQueue && _currentSong != null)
-            Positioned(
-              top: 60.0, // Added top margin to avoid overlap with a potential top bar
-              right: 0,
-              bottom: 80.0, // Height of the MusicPlayer, ensures QueueList doesn't overlap it
-              child: QueueList(
-                currentSong: _currentSong!,
-                onClose: () => setState(() => showQueue = false),
-                onSongSelected: (song) {
-                  // When a song is selected from the queue, play it
-                  // and ensure the existing queue context is maintained.
-                  final songWithQueue = {
-                    ...Map<String, dynamic>.from(song),
-                    'queue': _currentSong!['queue'] ?? [], // Preserve the original queue
-                  };
-                  _audioService.playSong(songWithQueue);
-                },
-              ),
-            ),
-        ],
-      ),
-      // floatingActionButton: ElevatedButton(
-      //   onPressed: _testPlaySong,
-      //   child: Text('Test Play'),
-      // ),
+    // Create the content for the TabBarView
+    return TabBarView(
+      controller: _tabController,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _buildHomeContent(),
+        BrowseScreen(
+          supabaseClient: supabaseClient,
+          onSongSelected: playSong,
+          currentlyPlayingSong: _currentSong,
+        ),
+        LibraryScreen(
+          supabaseClient: supabaseClient,
+          currentlyPlayingSong: _currentSong,
+          onAlbumSelected: _navigateToAlbum,
+        ),
+        ProfileScreen(supabaseClient: supabaseClient),
+      ],
     );
   }
 
@@ -664,8 +567,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
+            ),            const SizedBox(height: 16),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: fetchSongs(),
               builder: (context, snapshot) {
@@ -693,24 +595,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 }
 
                 final songs = snapshot.data!;
-                // Limit to 8 random songs as per requirements
                 final displaySongs = songs.length > 8
                     ? (songs..shuffle()).take(8).toList()
                     : songs;
 
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 1.0,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                return SizedBox(
+                  height: 230,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: displaySongs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: _buildQuickPlayCard(displaySongs[index]),
+                      );
+                    },
                   ),
-                  itemCount: displaySongs.length,
-                  itemBuilder: (context, index) {
-                    return _buildQuickPlayGridItem(displaySongs[index]);
-                  },
                 );
               },
             ),
@@ -751,7 +651,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 }
                 final albums = snapshot.data ?? [];
                 return SizedBox(
-                  height: 220,
+                  height: 250,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: albums.length,
@@ -876,182 +776,75 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildQuickPlayGridItem(Map<String, dynamic> song) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildQuickPlayCard(Map<String, dynamic> song) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
         onTap: () => playSong(song),
         child: Container(
+          width: 180,
+          height: 250, // Fixed height to prevent overflow
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
             color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Stack(
-            fit: StackFit.expand,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Song Image
+              // Album Art
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: song['image_url'] ?? '',
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                child: Image.network(
+                  song['image_url'] ?? '',
+                  width: 180,
+                  height: 180,
                   fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(
-                    color: Colors.grey[850],
-                    child: const Icon(Icons.music_note, color: Colors.white54, size: 40),
-                  ),
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 180,
+                      height: 180,
+                      color: Colors.grey[800],
+                      child: const Center(
+                        child: Icon(Icons.music_note, color: Colors.white, size: 40),
+                      ),
+                    );
+                  },
                 ),
-              ),
-              // Gradient overlay for better text visibility
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                    stops: const [0.6, 1.0],
-                  ),
-                ),
-              ),
-              // Play button overlay on hover (can be implemented with MouseRegion)
-              Positioned.fill(
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.black.withOpacity(0.5),
-                    ),
-                    child: Icon(
-                      Icons.play_arrow,
-                      color: Colors.white.withOpacity(0.8),
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ),
-              // Song info at bottom
-              Positioned(
-                bottom: 12,
-                left: 12,
-                right: 12,
+              ),              // Song Info
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0), // Reduced vertical padding
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      song['title'] ?? 'Unknown',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(0, 1),
-                            blurRadius: 3,
-                            color: Colors.black,
-                          ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (song['artist'] != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        song['artist'],
-                        style: TextStyle(
-                          color: Colors.grey[300],
-                          fontSize: 12,
-                          shadows: [
-                            Shadow(
-                              offset: const Offset(0, 1),
-                              blurRadius: 3,
-                              color: Colors.black,
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Keep the original method for backward compatibility
-  Widget _buildQuickPlayCard(Map<String, dynamic> song) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => playSong(song),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                  child: CachedNetworkImage(
-                    imageUrl: song['image_url'] ?? '',
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[850],
-                      child: const Icon(Icons.music_note, color: Colors.white54),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        song['title'] ?? 'Unknown',
+                    SizedBox(
+                      height: 20, // Fixed height for title
+                      child: Text(
+                        song['title'] ?? 'Unknown Title',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
+                        maxLines: 1, // Reduced to 1 line
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 1), // Reduced height
+                    SizedBox(
+                      height: 16, // Fixed height for artist
+                      child: Text(
+                        song['artist'] ?? 'Unknown Artist',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (song['artist'] != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          song['artist'],
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1064,23 +857,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildHitAlbumCard(Map<String, dynamic> album) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AlbumView(
-              album: album,
-              supabaseClient: supabaseClient,
-              onSongSelected: playSong,
-              currentlyPlayingSong: _currentSong,
-            ),
-          ),
-        );
+        // Use the ContentViewController to navigate to the album view
+        _navigateToAlbum(album);
       },
       child: Container(
         width: 200,
+        height: 250, // Fixed height to prevent overflow
         margin: const EdgeInsets.only(right: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
           children: [
             // Album Cover
             Container(
@@ -1141,29 +927,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             // Album Info
             Padding(
-              padding: const EdgeInsets.only(top: 12, left: 4),
+              padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
                 children: [
-                  Text(
-                    album['title'] ?? 'Unknown',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  SizedBox(
+                    height: 20, // Fixed height for title
+                    child: Text(
+                      album['title'] ?? 'Unknown',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14, // Reduced font size
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    album['artist'] ?? 'Various Artists',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 14,
+                  const SizedBox(height: 2), // Reduced height
+                  SizedBox(
+                    height: 16, // Fixed height for artist
+                    child: Text(
+                      album['artist'] ?? 'Various Artists',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12, // Reduced font size
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
