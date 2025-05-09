@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'album_view.dart';
 import 'services/playlist_generator_service.dart';
-import 'package:flutter/foundation.dart'; // for kIsWeb if needed
-import 'package:image_picker/image_picker.dart'; // Import image_picker
 import 'dart:io'; // Import for File
 import 'package:file_picker/file_picker.dart'; // Import file_picker
 import 'dart:ui'; // Import for BackdropFilter
-import 'package:flutter/services.dart'; // Import for PointerEvent
 
 class LibraryScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -15,14 +12,14 @@ class LibraryScreen extends StatefulWidget {
   final Function(Map<String, dynamic>)? onAlbumSelected;
 
   const LibraryScreen({
-    Key? key,
+    super.key,
     required this.supabaseClient,
     this.currentlyPlayingSong,
     this.onAlbumSelected,
-  }) : super(key: key);
+  });
 
   @override
-  _LibraryScreenState createState() => _LibraryScreenState();
+    State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
@@ -37,20 +34,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.initState();
     _getCurrentUser();
   }  Future<void> _getCurrentUser() async {
-    print("Checking current user session...");
+    //print("Checking current user session...");
     // First check for current session
     final session = Supabase.instance.client.auth.currentSession;
-    print("Session: $session");
+    //print("Session: $session");
     final user = session?.user;
-    print("User from session: $user");
+    //print("User from session: $user");
 
     if (user != null) {
-      print("Setting current user ID to: ${user.id}");
+      //print("Setting current user ID to: ${user.id}");
       setState(() {
         _currentUserId = user.id;
       });
     } else {
-      print("No user session found");
+      //print("No user session found");
       // If no session, show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -64,32 +61,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
   Future<List<Map<String, dynamic>>> _fetchPlaylists() async {
     try {
-      print("Fetching playlists for user: $_currentUserId");
+      //print("Fetching playlists for user: $_currentUserId");
       if (_currentUserId == null) {
-        print("No current user ID, returning empty list");
+        //print("No current user ID, returning empty list");
         return [];
       }
 
-      print("Making Supabase query...");
+      //print("Making Supabase query...");
       final data = await widget.supabaseClient
           .from('playlist')  // Changed back to 'playlist' as shown in policies
           .select('id, playlist_name, image_url, user_id, description, created_at')
           .eq('user_id', _currentUserId!)
           .order('created_at', ascending: false);
 
-      print("Supabase response data: $data");
+      //print("Supabase response data: $data");
 
       if (data != null) {
         final playlists = List<Map<String, dynamic>>.from(data);
-        print("Found ${playlists.length} playlists");
+        //print("Found ${playlists.length} playlists");
         return playlists;
       }
 
-      print("No data returned from Supabase");
+      //print("No data returned from Supabase");
       return [];
     } catch (e, stackTrace) {
-      print('Error fetching playlists: $e');
-      print('Stack trace: $stackTrace');
+      //print('Error fetching playlists: $e');
+      //print('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -114,7 +111,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Container(
+          child: SizedBox(
             width: 500,
             height: 500,
           child: Padding(
@@ -154,9 +151,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 : null,
                           ),
                           child: _playlistCoverImage == null
-                              ? Column(
+                              ? const Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(
                                       Icons.add_photo_alternate,
                                       color: Colors.white70,
@@ -282,7 +279,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     if (result != null) {
       final selectedFilePath = result.files.single.path!;
-      print("Selected file path: $selectedFilePath"); // Debug print
+      //print("Selected file path: $selectedFilePath"); // Debug //print
 
       // Check if the file exists
       final file = File(selectedFilePath);
@@ -290,12 +287,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         setState(() {
           _playlistCoverImage = file;
         });
-        print("Image set successfully: ${file.path}"); // Debug print
+        //print("Image set successfully: ${file.path}"); // Debug //print
       } else {
-        print("File does not exist: $selectedFilePath"); // Debug print
+        //print("File does not exist: $selectedFilePath"); // Debug //print
       }
     } else {
-      print("No file selected."); // Debug print
+      //print("No file selected."); // Debug //print
     }
   }
 
@@ -317,7 +314,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         });
         setState(() {}); // Refresh the list
       } catch (e) {
-        print('Error creating playlist: $e');
+        //print('Error creating playlist: $e');
       }
     }
   }
@@ -539,7 +536,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       album: playlistData,
                       supabaseClient: widget.supabaseClient,
                       onSongSelected: (song) {
-                        print("Song selected: $song");
+                        //print("Song selected: $song");
                       },
                       currentlyPlayingSong: widget.currentlyPlayingSong,
                     ),
@@ -663,7 +660,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   supabaseClient: widget.supabaseClient,
                   onSongSelected: (song) {
                     // ...handle song selection...
-                    print("Song selected: $song");
+                    //print("Song selected: $song");
                   },
                   currentlyPlayingSong: widget.currentlyPlayingSong,
                 ),
@@ -727,7 +724,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 supabaseClient: widget.supabaseClient,
                 onSongSelected: (song) {
                   // ...handle song selection...
-                  print("Song selected: $song");
+                  //print("Song selected: $song");
                 },
                 currentlyPlayingSong: widget.currentlyPlayingSong,
               ),

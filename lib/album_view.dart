@@ -3,9 +3,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:supabase/supabase.dart';
 import 'dart:async';
 import 'dart:ui'; // Add this import for ImageFilter
-import 'music_player.dart';
 import 'widgets/queue_list.dart';
-import 'home_page.dart'; // Add HomeScreen import
 import 'services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 
@@ -28,7 +26,7 @@ class AlbumView extends StatefulWidget {
   });
 
   @override
-  _AlbumViewState createState() => _AlbumViewState();
+  State<AlbumView> createState() => _AlbumViewState();
 }
 
 class _AlbumViewState extends State<AlbumView> {
@@ -104,14 +102,23 @@ class _AlbumViewState extends State<AlbumView> {
           : await widget.supabaseClient
               .from('songs_2')
               .select()
-              .eq('album_id', widget.album['id']);
-
-      print('Response from Supabase: $response');
+              .eq('album_id', widget.album['id']);      
+              // //print('Response from Supabase: $response');
 
       // Validate audio URLs before setting state
       final validSongs = List<Map<String, dynamic>>.from(response).map((song) {
-        print('Song ${song['title']} audio URL: ${song['audio_url']}');
-        return song;
+        // For playlist songs, the actual song data is nested in the songs_2 field
+        final songData = song['songs_2'] ?? song;
+        //print('Song ${songData['title']} audio URL: ${songData['audio_url']}');
+        return {
+          ...Map<String, dynamic>.from(songData),
+          'id': songData['id'],
+          'title': songData['title'],
+          'artist': songData['artist'] ?? widget.album['artist'],
+          'audio_url': songData['audio_url'],
+          'image_url': songData['image_url'] ?? widget.album['image_url'],
+          'duration': songData['duration'],
+        };
       }).toList();
 
       setState(() {
@@ -122,11 +129,11 @@ class _AlbumViewState extends State<AlbumView> {
           currentPlayingIndex = songs.indexWhere(
             (song) => song['id'] == widget.currentlyPlayingSong!['id']
           );
-          print('Found currently playing song at index: $currentPlayingIndex');
+          //print('Found currently playing song at index: $currentPlayingIndex');
         }
       });
     } catch (e) {
-      print('Error loading songs: $e');
+      //print('Error loading songs: $e');
       setState(() {
         isLoading = false;
       });
@@ -135,37 +142,58 @@ class _AlbumViewState extends State<AlbumView> {
 
   void _playAll() {
     if (songs.isNotEmpty) {
-      print('Starting album playback with ${songs.length} songs');
+      //print('Starting album playback with ${songs.length} songs');
       setState(() {
         currentPlayingIndex = 0;
       });
       _playSong(songs[0]);
     } else {
-      print('No songs available to play');
+      //print('No songs available to play');
     }
   }
 
   void _playSong(Map<String, dynamic> song) {
     if (song['audio_url'] == null) {
-      print('Error: No audio URL for song ${song['title']}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot play song: Missing audio URL')),
-      );
+      //print('Error: No audio URL for song ${song['title']}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot play song: Missing audio URL')),
+        );
+      }
       return;
-    }
-
-    try {
+    }    try {
       // Format queue data first to ensure all songs have required fields
-      final formattedQueue = songs.map((s) => {
-        ...Map<String, dynamic>.from(s),
-        'id': s['id'],
-        'title': s['title'] ?? 'Unknown',
-        'artist': s['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-        'audio_url': s['audio_url'],
-        'image_url': s['image_url'] ?? widget.album['image_url'],
-        'album': widget.album['playlist_name'] ?? widget.album['title'],
-        'album_id': widget.album['id'],
+      final formattedQueue = songs.map((s) {
+        // Ensure we have the base song data
+        final songData = s['songs_2'] ?? s;
+        
+        // Convert duration to integer if it's a string
+        var duration = songData['duration'];
+        if (duration is String && duration.contains(':')) {
+          // Convert MM:SS format to seconds
+          final parts = duration.split(':');
+          duration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
+        }
+
+        return {
+          ...Map<String, dynamic>.from(songData),
+          'id': songData['id'],
+          'title': songData['title'] ?? 'Unknown',
+          'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+          'audio_url': songData['audio_url'],
+          'image_url': songData['image_url'] ?? widget.album['image_url'],
+          'album': widget.album['playlist_name'] ?? widget.album['title'],
+          'album_id': widget.album['id'],
+          'duration': duration,
+        };
       }).toList();
+
+      // Add duration handling for the current song
+      var songDuration = song['duration'];
+      if (songDuration is String && songDuration.contains(':')) {
+        final parts = songDuration.split(':');
+        songDuration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
+      }
 
       // Create song context with formatted queue
       final songWithAlbumContext = {
@@ -177,23 +205,28 @@ class _AlbumViewState extends State<AlbumView> {
         'image_url': song['image_url'] ?? widget.album['image_url'],
         'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
+        'duration': songDuration,
         'queue': formattedQueue, // Use the formatted queue
       };
 
-      print('Playing song with metadata: $songWithAlbumContext');
-      print('Queue size: ${formattedQueue.length}');
+      //print('Playing song with metadata: $songWithAlbumContext');
+      //print('Queue size: ${formattedQueue.length}');
 
       widget.onSongSelected(songWithAlbumContext);
 
-      setState(() {
-        _currentSong = songWithAlbumContext; // Store full context including queue
-        currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
-      });
+      if (mounted) {
+        setState(() {
+          _currentSong = songWithAlbumContext;
+          currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
+        });
+      }
     } catch (e) {
-      print('Error playing song: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error playing song: ${e.toString()}')),
-      );
+      //print('Error playing song: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error playing song: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -228,12 +261,12 @@ class _AlbumViewState extends State<AlbumView> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
+      child: const Row(
         children: [
           // Track number column
           SizedBox(
             width: 30,
-            child: const Text(
+            child: Text(
               "#",
               style: TextStyle(
                 color: Colors.white70,
@@ -243,12 +276,12 @@ class _AlbumViewState extends State<AlbumView> {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 20),
+          SizedBox(width: 20),
           // Song Image space
-          const SizedBox(width: 40),
-          const SizedBox(width: 16),
+          SizedBox(width: 40),
+          SizedBox(width: 16),
           // Title column
-          const Expanded(
+          Expanded(
             child: Text(
               "TITLE",
               style: TextStyle(
@@ -259,7 +292,7 @@ class _AlbumViewState extends State<AlbumView> {
             ),
           ),
           // Duration column
-          const SizedBox(
+          SizedBox(
             width: 80,
             child: Text(
               "DURATION",
@@ -271,7 +304,7 @@ class _AlbumViewState extends State<AlbumView> {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 40), // Space for more options
+          SizedBox(width: 40), // Space for more options
         ],
       ),
     );

@@ -17,14 +17,14 @@ class MusicPlayer extends StatefulWidget {
   final bool showQueue;
 
   const MusicPlayer({
-    Key? key,
+    super.key,
     required this.song,
     this.onQueueToggle,
     this.showQueue = false,
-  }) : super(key: key);
+  });
 
   @override
-  _MusicPlayerState createState() => _MusicPlayerState();
+    State<MusicPlayer> createState() => _MusicPlayerState();
 }
 
 class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStateMixin {

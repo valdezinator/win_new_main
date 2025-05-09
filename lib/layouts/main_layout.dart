@@ -18,7 +18,7 @@ class MainLayout extends StatefulWidget {
   final Function(bool) onQueueToggle;
 
   const MainLayout({
-    Key? key,
+    super.key,
     required this.child,
     required this.currentIndex,
     this.currentSong,
@@ -27,10 +27,10 @@ class MainLayout extends StatefulWidget {
     required this.onNavItemSelected,
     this.showQueue = false,
     required this.onQueueToggle,
-  }) : super(key: key);
+  });
 
   @override
-  _MainLayoutState createState() => _MainLayoutState();
+  State<MainLayout> createState() => _MainLayoutState();
 }
 
 class _MainLayoutState extends State<MainLayout> {
@@ -47,21 +47,24 @@ class _MainLayoutState extends State<MainLayout> {
               SizedBox(
                 width: 232, // 200 + 16 * 2 for margins
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 108), // Bottom padding for music player
+                  padding: const EdgeInsets.fromLTRB(0, 16, 16, 108), // Bottom padding for music player
                   child: Material(
                     elevation: 8,
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(15),
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
-                          width: 1,
-                        ),
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.1),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(15),
+                        bottomRight: Radius.circular(15),
                       ),
-                      child: Column(
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
                         children: [
                           const SizedBox(height: 40),
                           _buildNavItem(0, 'assets/icons/home_icon.svg', 'Home'),
@@ -71,7 +74,7 @@ class _MainLayoutState extends State<MainLayout> {
                           const Spacer(),
                           Padding(
                             padding: const EdgeInsets.all(16.0),
-                            child: Container(
+                            child: SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: _handleSignOut,

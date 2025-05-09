@@ -13,30 +13,26 @@ class AudioService {
   
   AudioService._internal() {
     _loadLastPlayedSong();
-    
-    // Setup error handler with immediate cleanup
+      // Setup state change handler with auto-play functionality
     player.playerStateStream.listen((state) async {
       print('\n=== Player State Changed ===');
       print('Processing State: ${state.processingState}');
       print('Playing: ${state.playing}');
       
       if (state.processingState == ProcessingState.completed) {
-        print('Song completed naturally, resetting player...');
-        _isPlaying = false;
-        _isPlayingController.add(false);
+        print('Song completed naturally, preparing to play next...');
         
-        // Important: Reset position immediately
-        await player.seek(Duration.zero);
-        await player.stop();
-        
-        // Try to play next song with a small delay to ensure clean state
-        Future.delayed(const Duration(milliseconds: 100), () {
-          playNext().then((_) {
-            print('Next song started playing');
-          }).catchError((e) {
-            print('Error playing next song: $e');
-          });
-        });
+        if (_currentIndex < _queue.length - 1) {
+          // Don't stop or reset - just move to next song
+          print('Playing next song in queue (${_currentIndex + 1}/${_queue.length})');
+          await playNext();
+        } else {
+          print('Reached end of queue');
+          _isPlaying = false;
+          _isPlayingController.add(false);
+          await player.stop();
+          await player.seek(Duration.zero);
+        }
       }
     }, onError: (Object e, StackTrace stackTrace) {
       print('Error in player state stream: $e');
@@ -112,102 +108,88 @@ class AudioService {
       print('Error saving last played song: $e');
     }
   }
-
   Future<void> playSong(Map<String, dynamic> song) async {
-    print('\\\\n=== PlaySong Called ===');
-    print('Song data: ${song.toString()}');
-    
     try {
+      print('=== Starting PlaySong for ${song['title']} ===');
+      print('Audio URL: ${song['audio_url']}');
+      
+      if (song['audio_url'] == null) {
+        print('Error: No audio URL provided');
+        return;
+      }
+
+      // Extract the actual song data if it's nested
+      final songData = song['songs_2'] ?? song;
+      
+      // Ensure we have all required fields
+      final processedSong = {
+        ...Map<String, dynamic>.from(songData),
+        'id': songData['id'],
+        'title': songData['title'],
+        'audio_url': songData['audio_url'],
+        'artist': songData['artist'],
+        'image_url': songData['image_url'],
+        'duration': songData['duration'],
+        'queue': song['queue'], // Keep the queue from the original song object
+      };
+
+      // Stop current playback first
       print('Stopping current playback...');
       await player.stop();
+
+      // Update the current song and queue state
+      _currentSong = song;
+      _currentSongController.add(song);
       
-      // Reset player state if it was completed to allow replaying the same source if needed
-      if (player.processingState == ProcessingState.completed) {
-        await player.seek(Duration.zero);
-      }
-      
-      String? audioUrl = song['audio_url']?.toString();
-      if (audioUrl == null || audioUrl.isEmpty) {
-        throw Exception('Invalid audio URL: $audioUrl');
-      }
-
-      // Ensure URL is properly formatted
-      if (!audioUrl.startsWith('http://') && !audioUrl.startsWith('https://')) {
-        audioUrl = 'https://$audioUrl'; // Default to https if no scheme
-      }
-      print('Audio URL: $audioUrl');
-
-      // Fetch duration if not available
-      if (song['duration'] == null) {
-        try {
-          final durationPlayer = AudioPlayer();
-          final duration = await durationPlayer.setUrl(audioUrl); // setUrl might throw
-          song['duration'] = duration?.inSeconds;
-          await durationPlayer.dispose();
-        } catch (e) {
-          print('Error fetching duration for ${song['title']}: $e');
-          // Continue without duration, or set a default, or rethrow if critical
-        }
-      }
-
-      // Set the current song internally
-      _currentSong = Map<String, dynamic>.from(song); 
-
-      // Manage the queue
-      if (song['queue'] != null && (song['queue'] as List).isNotEmpty) {
-        // If the incoming song map has a queue, that becomes the authoritative queue
+      if (song['queue'] != null) {
         _queue = List<Map<String, dynamic>>.from(song['queue']);
-        _currentIndex = _queue.indexWhere((s) => s['id'] == _currentSong!['id']);
-        
-        if (_currentIndex == -1) { 
-            print('Warning: Song ID ${_currentSong!['id']} not found in its provided queue. Adding it to the start.');
-            _queue.insert(0, _currentSong!); // Add to the start if not found
-            _currentIndex = 0;
-        }
-      } else {
-        // No queue provided with the song, or an empty queue.
-        // Start a new queue with just this song.
-        print('No valid queue in song object. Setting queue to this song only: ${_currentSong!['title']}');
-        _queue = [_currentSong!];
-        _currentIndex = 0;
-      }
-      // CRITICAL: Ensure the _currentSong map itself reflects the authoritative queue for broadcasts and saving
-      _currentSong!['queue'] = _queue; 
-
-      // Broadcast the updated song (which now includes the correct queue)
-      _currentSongController.add(_currentSong!); 
-      
+        _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
+      }      // Create the audio source with proper media item
       final audioSource = AudioSource.uri(
-        Uri.parse(audioUrl),
+        Uri.parse(processedSong['audio_url']),
         tag: MediaItem(
-          id: _currentSong!['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(), // Ensure ID is never empty
-          title: _currentSong!['title']?.toString() ?? 'Unknown Title',
-          artist: _currentSong!['artist']?.toString() ?? 'Unknown Artist',
-          artUri: _currentSong!['image_url'] != null ? Uri.parse(_currentSong!['image_url']) : null,
-          album: _currentSong!['album_title']?.toString() ?? _currentSong!['album']?.toString(), // Prefer album_title
-          duration: song['duration'] != null ? Duration(seconds: song['duration']) : null,
+          id: processedSong['id']?.toString() ?? '',
+          title: processedSong['title']?.toString() ?? 'Unknown',
+          artist: processedSong['artist']?.toString() ?? 'Unknown Artist',
+          duration: processedSong['duration'] != null 
+              ? Duration(seconds: processedSong['duration'] is int 
+                  ? processedSong['duration'] 
+                  : int.tryParse(processedSong['duration'].toString()) ?? 0)
+              : null,
+          artUri: processedSong['image_url'] != null ? Uri.parse(processedSong['image_url']) : null,
         ),
-      );
-
-      print('Setting audio source for: ${_currentSong!['title']}');
-      await player.setAudioSource(audioSource);
-      
-      print('Starting playback for: ${_currentSong!['title']}');
-      await player.play();
-      _isPlaying = true;
-      _isPlayingController.add(true);
-      
-      print('Playback started successfully for: ${_currentSong!['title']}');
-      await _saveLastPlayedSong(); // Save state including the new queue
-      
-    } catch (e) {
+      );      try {
+        // Set the audio source and start playing
+        await player.setAudioSource(audioSource, initialPosition: Duration.zero);
+        
+        // Update state before starting playback
+        _currentSong = processedSong;
+        if (processedSong['queue'] != null) {
+          _queue = List<Map<String, dynamic>>.from(processedSong['queue']);
+          _currentIndex = _queue.indexWhere((s) => s['id'] == processedSong['id']);
+        }
+        _currentSongController.add(processedSong);
+        
+        // Start playback
+        await player.play();
+        _isPlaying = true;
+        _isPlayingController.add(true);
+        
+        // Save state after successful playback start
+        await _saveLastPlayedSong();
+        
+        print('=== PlaySong Completed Successfully for ${processedSong['title']} ===\\n');
+      } catch (e) {
+        print('Error during audio source setup or playback: $e');
+        throw e; // Re-throw to be caught by outer try-catch
+      }
+    } catch (e, stackTrace) {
       print('Error in playSong for ${song['title']}: $e');
+      print('Stack trace: $stackTrace');
       _isPlaying = false;
       _isPlayingController.add(false);
-      // Optionally rethrow or handle specific errors (e.g., network issues)
-      // rethrow; 
+      rethrow;
     }
-    print('=== PlaySong Completed for ${song['title']} ===\\\\n');
   }
 
   // Plays song with caching
@@ -260,7 +242,6 @@ class AudioService {
     }
     print('=== TogglePlayPause Completed ===\\\\n');
   }
-
   Future<void> playNext() async {
     print('\\\\n=== PlayNext Called ===');
     try {
@@ -277,12 +258,45 @@ class AudioService {
         final nextSongMap = _queue[_currentIndex];
         print('Preparing to play next song: ${nextSongMap['title']} (ID: ${nextSongMap['id']})');
         
-        // Construct the song map for playSong. It's crucial that this map
-        // carries the *current, authoritative queue* from the AudioService.
-        Map<String, dynamic> songToPlay = Map<String, dynamic>.from(nextSongMap);
-        songToPlay['queue'] = _queue; // Pass the current full queue
+        // Ensure we preserve all required metadata when constructing the next song
+        Map<String, dynamic> songToPlay = {
+          ...Map<String, dynamic>.from(nextSongMap),
+          'queue': _queue,
+          'album': nextSongMap['album'] ?? _currentSong?['album'],
+          'album_id': nextSongMap['album_id'] ?? _currentSong?['album_id'],
+          'album_art': nextSongMap['album_art'] ?? nextSongMap['image_url'] ?? _currentSong?['album_art'],
+          'artist': nextSongMap['artist'] ?? _currentSong?['artist'] ?? 'Unknown Artist',
+          'duration': nextSongMap['duration'],
+        };
 
-        await playSong(songToPlay); // playSong will handle all setup and broadcasts
+        // Play the song without stopping the current one first
+        final audioSource = AudioSource.uri(
+          Uri.parse(songToPlay['audio_url']),
+          tag: MediaItem(
+            id: songToPlay['id']?.toString() ?? '',
+            title: songToPlay['title']?.toString() ?? 'Unknown',
+            artist: songToPlay['artist']?.toString() ?? 'Unknown Artist',
+            duration: songToPlay['duration'] != null 
+                ? Duration(seconds: songToPlay['duration'] is int 
+                    ? songToPlay['duration'] 
+                    : int.tryParse(songToPlay['duration'].toString()) ?? 0)
+                : null,
+            artUri: songToPlay['image_url'] != null ? Uri.parse(songToPlay['image_url']) : null,
+          ),
+        );
+
+        // Set the audio source and start playing immediately
+        await player.setAudioSource(audioSource);
+        await player.play();
+        
+        // Update state
+        _currentSong = songToPlay;
+        _currentSongController.add(songToPlay);
+        _isPlaying = true;
+        _isPlayingController.add(true);
+        
+        // Save state
+        await _saveLastPlayedSong();
 
       } else {
         print('End of queue reached.');

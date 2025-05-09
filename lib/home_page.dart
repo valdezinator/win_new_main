@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase/supabase.dart';
-import 'package:just_audio/just_audio.dart';
 import 'dart:async';
 import 'browse_screen.dart';
 import 'album_view.dart';
-import 'music_player.dart';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
-import 'widgets/queue_list.dart';
 import 'library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sign_in.dart';
@@ -18,7 +13,6 @@ import 'dart:convert'; // NEW import
 import 'package:flutter_svg/flutter_svg.dart'; // Add this import
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 import 'profile_screen.dart';
-import 'layouts/main_layout.dart';
 import 'layouts/content_view.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,14 +21,14 @@ class HomeScreen extends StatefulWidget {
   final int initialTabIndex;
 
   const HomeScreen({
-    Key? key,
+    super.key,
     this.initialSong,
     this.autoplay = false,
     this.initialTabIndex = 0,
-  }) : super(key: key);
+  });
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+    State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
@@ -117,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
-      print('Error fetching songs: $e');
+      //print('Error fetching songs: $e');
       rethrow;
     }
   }
@@ -130,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           .eq('category', 'album, hits')
           .order('release_date', ascending: false);
 
-      // print('Hit Albums Response: $response');
+      // //print('Hit Albums Response: $response');
 
       if (response.isEmpty) {
         throw Exception('No hit albums found');
@@ -138,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      // print('Error fetching hit albums: $e');
+      // //print('Error fetching hit albums: $e');
       rethrow;
     }
   }
@@ -153,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching recently played: $e');
+      //print('Error fetching recently played: $e');
       return [];
     }
   }
@@ -181,12 +175,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             };
           }).toList();
         } else {
-          print('Jamendo API error: ${jamendoResponse.statusCode}');
+          //print('Jamendo API error: ${jamendoResponse.statusCode}');
         }
       }
       return trendingList;
     } catch (e) {
-      print('Error fetching trending songs: $e');
+      //print('Error fetching trending songs: $e');
       return [];
     }
   }
@@ -200,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching genres: $e');
+      //print('Error fetching genres: $e');
       return [];
     }
   }
@@ -214,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching artists: $e');
+      //print('Error fetching artists: $e');
       return [];
     }
   }
@@ -231,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching new releases: $e');
+      //print('Error fetching new releases: $e');
       return [];
     }
   }
@@ -388,10 +382,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void playSong(Map<String, dynamic> song) {
     try {
-      print('Playing song: ${song.toString()}');
+      //print('Playing song: ${song.toString()}');
       // Ensure we have all required fields
       if (song['audio_url'] == null) {
-        print('Error: No audio URL provided');
+        //print('Error: No audio URL provided');
         return;
       }
 
@@ -412,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Play the song
       _audioService.playSong(songWithContext);
     } catch (e) {
-      print('Error playing song: $e');
+      //print('Error playing song: $e');
       // Show error to user
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error playing song: ${e.toString()}')),
@@ -578,7 +572,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 }
 
                 if (snapshot.hasError) {
-                  print('Error in Quick Play: ${snapshot.error}');
+                  //print('Error in Quick Play: ${snapshot.error}');
                   return const Center(
                     child: Text(
                       'Error loading songs',

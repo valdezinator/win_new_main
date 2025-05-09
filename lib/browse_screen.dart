@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase/supabase.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'home_page.dart';
 import 'music_player.dart';
 import 'widgets/queue_list.dart';
-import 'dart:ui';
 import 'dart:math';
 
 class BrowseScreen extends StatefulWidget {
@@ -13,14 +10,14 @@ class BrowseScreen extends StatefulWidget {
   final Map<String, dynamic>? currentlyPlayingSong;
 
   const BrowseScreen({
-    Key? key,
+    super.key,
     required this.supabaseClient,
     required this.onSongSelected,
     this.currentlyPlayingSong,
-  }) : super(key: key);
+  });
 
   @override
-  _BrowseScreenState createState() => _BrowseScreenState();
+   State<BrowseScreen> createState() => _BrowseScreenState();
 }
 
 class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin {
@@ -78,7 +75,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         isLoading = false;
       });
     } catch (e) {
-      print('Error loading albums: $e');
+      //print('Error loading albums: $e');
       setState(() {
         isLoading = false;
       });
@@ -152,7 +149,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         isSearching = false;
       });
     } catch (e) {
-      print('Error searching content: $e');
+      //print('Error searching content: $e');
       setState(() => isSearching = false);
     }
   }
@@ -164,7 +161,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         onTap: () {
           // Navigate to album view
         },
-        child: Container(
+        child: SizedBox(
           width: 160,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +297,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       };
       widget.onSongSelected(songWithSearchContext);
     } else {
-      print('Error: No audio URL for song ${song['title']}');
+      //print('Error: No audio URL for song ${song['title']}');
     }
   }
 
