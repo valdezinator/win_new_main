@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io'; // Add this import for InternetAddress
 import 'browse_screen.dart';
 import 'album_view.dart';
 import 'services/audio_service.dart';
@@ -76,9 +77,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  StreamSubscription? _audioSubscription;
+
   void _setupAudioListener() {
-    _audioService.currentSongStream.listen((song) {
-      setState(() => _currentSong = song);
+    _audioSubscription = _audioService.currentSongStream.listen((song) {
+      if (mounted) {
+        setState(() => _currentSong = song);
+      }
     });
   }
 
@@ -91,8 +96,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // Call super.dispose() first
-    super.dispose();
+    // Cancel audio subscription
+    _audioSubscription?.cancel();
+
+    // Dispose controllers
     _tabController.dispose();
     _dynamicPlaylistService.dispose();
 
@@ -101,6 +108,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Use a separate async function to handle the async operations
       _saveSongState();
     }
+
+    // Call super.dispose() last
+    super.dispose();
   }
 
   // Separate async method to save song state
@@ -137,16 +147,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           .eq('category', 'album, hits')
           .order('release_date', ascending: false);
 
-      // //print('Hit Albums Response: $response');
-
       if (response.isEmpty) {
         throw Exception('No hit albums found');
       }
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      // //print('Error fetching hit albums: $e');
       rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchDownloadedAlbums() async {
+    try {
+      final albums = await _audioService.getDownloadedAlbums();
+
+      // Check if we're online
+      bool isOnline = true;
+      try {
+        final result = await InternetAddress.lookup('google.com');
+        isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      } catch (e) {
+        isOnline = false;
+      }
+
+      // If we're offline, add a flag to indicate this
+      if (!isOnline) {
+        for (var album in albums) {
+          album['offline_mode'] = true;
+        }
+      }
+
+      return albums;
+    } catch (e) {
+      return [];
     }
   }
 
@@ -394,10 +427,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void playSong(Map<String, dynamic> song) {
     try {
-      //print('Playing song: ${song.toString()}');
       // Ensure we have all required fields
       if (song['audio_url'] == null) {
-        //print('Error: No audio URL provided');
         return;
       }
 
@@ -410,19 +441,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         'title': song['title'] ?? 'Unknown Title',
       };
 
-      // Update UI state
-      setState(() {
-        _currentSong = songWithContext;
-      });
-
-      // Play the song
+      // Play the song - this will update the UI through the stream listener
       _audioService.playSong(songWithContext);
     } catch (e) {
-      //print('Error playing song: $e');
       // Show error to user
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error playing song: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error playing song: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -732,6 +759,78 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           imageUrl: release['image_url'] ?? '',
                         ),
                       );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // Downloaded Albums Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Downloaded Albums',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Navigate to see all downloaded albums
+                  },
+                  child: Text(
+                    'See All',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[400],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 260,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: fetchDownloadedAlbums(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final albums = snapshot.data ?? [];
+
+                  if (albums.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.download_done, size: 48, color: Colors.grey[600]),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No downloaded albums yet',
+                            style: TextStyle(color: Colors.grey[400], fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Download albums to listen offline',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: albums.length,
+                    itemBuilder: (context, index) {
+                      final album = albums[index];
+                      return _buildHitAlbumCard(album);
                     },
                   );
                 },

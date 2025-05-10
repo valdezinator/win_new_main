@@ -38,20 +38,20 @@ class _QueueListState extends State<QueueList> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    
+
     // Check if already in a jam session
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Scroll to current song if there's a queue
       if (widget.currentSong['queue'] != null && (widget.currentSong['queue'] as List).isNotEmpty) {
         _scrollToCurrentSong();
       }
-      
+
       // Check jam session status
       _isInJamSession = _jamService.isInSession;
       if (_isInJamSession) {
         setState(() {});
       }
-      
+
       // Listen for jam session changes
       _jamService.sessionStream.listen((session) {
         if (mounted) {
@@ -72,7 +72,7 @@ class _QueueListState extends State<QueueList> {
 
   void _scrollToCurrentSong() {
     if (!_scrollController.hasClients || widget.currentSong['queue'] == null) return;
-    
+
     final queue = List<Map<String, dynamic>>.from(widget.currentSong['queue'] ?? []);
     // The first song in the passed 'queue' from currentSong is the current playing one
     // if the queue is structured such that currentSong['queue'][0] is the current song.
@@ -83,13 +83,13 @@ class _QueueListState extends State<QueueList> {
     // However, Spotify's queue usually shows "Now Playing" separately and "Next Up" scrolls.
     // Let's adjust scrolling based on the "Next Up" list.
     // For now, the existing logic scrolls the combined list, which is fine.
-    
+
     final currentIndexInDisplayedQueue = queue.indexWhere((song) => song['id'] == widget.currentSong['id']);
-    
+
     if (currentIndexInDisplayedQueue != -1) {
       // If "Now Playing" is a separate section, scrolling should apply to "Next Up"
       // For now, let's assume the current song (index 0 in `queue`) should be at the top.
-      final scrollPosition = currentIndexInDisplayedQueue * _songItemHeight; 
+      final scrollPosition = currentIndexInDisplayedQueue * _songItemHeight;
       _scrollController.animateTo(
         scrollPosition,
         duration: const Duration(milliseconds: 500),
@@ -102,7 +102,7 @@ class _QueueListState extends State<QueueList> {
   void didUpdateWidget(QueueList oldWidget) {
     super.didUpdateWidget(oldWidget);
     // If the current song ID changes, or the queue itself changes reference or primary content
-    if (widget.currentSong['id'] != oldWidget.currentSong['id'] || 
+    if (widget.currentSong['id'] != oldWidget.currentSong['id'] ||
         widget.currentSong['queue'] != oldWidget.currentSong['queue']) {
       // Ensure scrolling happens after the build
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -116,39 +116,36 @@ class _QueueListState extends State<QueueList> {
   Widget _buildSongItem(Map<String, dynamic> song, bool isCurrentSong, bool isHovered, {VoidCallback? onTap}) {
     final String title = song['title'] ?? 'Unknown Title';
     final String artist = song['artist'] ?? 'Unknown Artist';
-    // final String album = song['album_title'] ?? 'Unknown Album'; // Assuming 'album_title'
-    // final String duration = song['duration'] != null ? _formatDuration(song['duration']) : '0:00'; // Assuming 'duration' and a formatter
 
     return MouseRegion(
-      onEnter: (_) => setState(() => hoveredIndex = song['id'].hashCode), // Use a unique ID for hover
+      onEnter: (_) => setState(() => hoveredIndex = song['id'].hashCode),
       onExit: (_) => setState(() => hoveredIndex = null),
-      child: InkWell( // Use InkWell for tap effects
+      child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8), // Add border radius for InkWell ripple
+        borderRadius: BorderRadius.circular(8),
         child: Container(
           height: _songItemHeight,
-          // Use theme color for hover, make it subtle
           color: isHovered ? Theme.of(context).hoverColor.withOpacity(0.5) : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: CachedNetworkImage( // Use CachedNetworkImage
+                child: CachedNetworkImage(
                   imageUrl: song['image_url'] ?? '',
-                  width: 48, // Increased size
+                  width: 48,
                   height: 48,
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
                     width: 48,
                     height: 48,
-                    color: Theme.of(context).colorScheme.surfaceVariant, // Use theme color
+                    color: Theme.of(context).colorScheme.surfaceVariant,
                     child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   errorWidget: (context, url, error) => Container(
                     width: 48,
                     height: 48,
-                    color: Theme.of(context).colorScheme.surfaceVariant, // Use theme color
+                    color: Theme.of(context).colorScheme.surfaceVariant,
                     child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ),
@@ -162,7 +159,6 @@ class _QueueListState extends State<QueueList> {
                     Text(
                       title,
                       style: TextStyle(
-                        // Use theme color, highlight current song
                         color: isCurrentSong ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                         fontSize: 14,
                         fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
@@ -171,9 +167,9 @@ class _QueueListState extends State<QueueList> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      artist, // Display artist (and album if available)
+                      artist,
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant, // Use theme color
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -183,9 +179,7 @@ class _QueueListState extends State<QueueList> {
                 ),
               ),
               if (isCurrentSong)
-                Icon(Icons.volume_up, color: Theme.of(context).colorScheme.primary, size: 20), // Use theme color
-              // if (!isCurrentSong && onTap != null) // Optional: Add a play button or drag handle for upcoming
-              //   IconButton(icon: Icon(Icons.play_arrow, color: Colors.white70), onPressed: onTap, splashRadius: 20,),
+                Icon(Icons.volume_up, color: Theme.of(context).colorScheme.primary, size: 20),
             ],
           ),
         ),
@@ -199,9 +193,9 @@ class _QueueListState extends State<QueueList> {
       setState(() {
         _isJoining = true;
       });
-      
+
       await _jamService.createSession(widget.currentSong, widget.userName);
-      
+
       setState(() {
         _isJoining = false;
         _isInJamSession = true;
@@ -211,7 +205,7 @@ class _QueueListState extends State<QueueList> {
       setState(() {
         _isJoining = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to start Jam Session')),
@@ -235,9 +229,9 @@ class _QueueListState extends State<QueueList> {
       setState(() {
         _isJoining = true;
       });
-      
+
       await _jamService.joinSession(sessionId);
-      
+
       setState(() {
         _isJoining = false;
         _isInJamSession = true;
@@ -247,7 +241,7 @@ class _QueueListState extends State<QueueList> {
       setState(() {
         _isJoining = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to join Jam Session')),
@@ -276,7 +270,7 @@ class _QueueListState extends State<QueueList> {
   @override
   Widget build(BuildContext context) {
     final fullQueueFromWidget = List<Map<String, dynamic>>.from(widget.currentSong['queue'] ?? []);
-    
+
     Map<String, dynamic>? nowPlayingSong;
     List<Map<String, dynamic>> nextUpQueue = [];
 
@@ -348,7 +342,7 @@ class _QueueListState extends State<QueueList> {
                   ],
                 ),
               ),
-              
+
               // Jam Session Controls
               if (!_isInJamSession) ...[
                 Padding(
@@ -388,7 +382,7 @@ class _QueueListState extends State<QueueList> {
                     if (snapshot.hasData && snapshot.data != null) {
                       final session = snapshot.data!;
                       final isHost = _jamService.isHost;
-                      
+
                       return JamSessionControls(
                         sessionId: session['id'],
                         sessionName: session['name'],
@@ -460,7 +454,7 @@ class _QueueListState extends State<QueueList> {
                   ),
                 ),
               ],
-              
+
               if (nowPlayingSong == null && nextUpQueue.isEmpty)
                 Expanded( // Removed const
                   child: Center(

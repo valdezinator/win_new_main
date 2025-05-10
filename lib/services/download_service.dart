@@ -9,12 +9,12 @@ import 'secure_storage_service.dart';
 class DownloadService {
   static final DownloadService _instance = DownloadService._internal();
   factory DownloadService() => _instance;
-  
+
   DownloadService._internal();
 
   final _downloadProgressController = StreamController<Map<String, double>>.broadcast();
   final _secureStorage = SecureStorageService();
-  
+
   Stream<Map<String, double>> get downloadProgress => _downloadProgressController.stream;
 
   DateTime _lastUpdate = DateTime.now();
@@ -24,49 +24,76 @@ class DownloadService {
     try {
       final totalItems = songs.length + 1; // +1 for album cover
       var completedItems = 0;
-      
-      // Download album cover
+      final Map<String, double> progressMap = {};
+
+      // Function to update total progress
+      void updateTotalProgress() {
+        double totalProgress = 0;
+        if (progressMap.isNotEmpty) {
+          totalProgress = progressMap.values.reduce((a, b) => a + b) / totalItems;
+        }
+        _downloadProgressController.add({'Total': totalProgress});
+      }
+
+      // Download album cover first (this is important for UI)
       if (album['image_url'] != null) {
         await _downloadFile(
           album['image_url'],
           'album_${album['id']}_cover',
           'Album Cover',
           (progress) {
-            _downloadProgressController.add({
-              'Album Cover': (completedItems + progress) / totalItems
-            });
+            progressMap['Album Cover'] = progress;
+            updateTotalProgress();
           }
         );
         completedItems++;
+        progressMap['Album Cover'] = 1.0;
+        updateTotalProgress();
       }
 
-      // Download songs sequentially
+      // Download songs in parallel with a maximum of 3 concurrent downloads
+      final songDownloads = <Future<void>>[];
+
       for (var song in songs) {
         if (song['audio_url'] != null) {
           final filename = 'song_${song['id']}';
-          await _downloadFile(
+          final songTitle = song['title'];
+
+          final downloadFuture = _downloadFile(
             song['audio_url'],
             filename,
-            song['title'],
+            songTitle,
             (progress) {
-              _downloadProgressController.add({
-                song['title']: (completedItems + progress) / totalItems
-              });
+              progressMap[songTitle] = progress;
+              updateTotalProgress();
             }
-          );
-          completedItems++;
+          ).then((_) {
+            completedItems++;
+            progressMap[songTitle] = 1.0;
+            updateTotalProgress();
+          });
+
+          songDownloads.add(downloadFuture);
         }
       }
 
-      // Store metadata
+      // Wait for all downloads to complete
+      await Future.wait(songDownloads);
+
+      // Store metadata with additional information for offline playback
       final metadata = {
         'album_id': album['id'],
         'title': album['title'],
         'artist': album['artist'],
+        'image_url': album['image_url'],
         'songs': songs.map((s) => {
           'id': s['id'],
           'title': s['title'],
+          'artist': s['artist'],
+          'duration': s['duration'],
+          'image_url': s['image_url'] ?? album['image_url'],
           'filename': 'song_${s['id']}',
+          'audio_url': s['audio_url'], // Store original URL for reference
         }).toList(),
         'downloaded_at': DateTime.now().toIso8601String(),
       };
@@ -82,8 +109,8 @@ class DownloadService {
   }
 
   Future<void> _downloadFile(
-    String url, 
-    String filename, 
+    String url,
+    String filename,
     String label,
     void Function(double progress) onProgress
   ) async {
@@ -93,12 +120,12 @@ class DownloadService {
       var downloadedBytes = 0;
 
       final chunks = <int>[];
-      
+
       // Process the download in chunks
       for (var byte in response.bodyBytes) {
         chunks.add(byte);
         downloadedBytes++;
-        
+
         // Throttle progress updates
         final now = DateTime.now();
         if (now.difference(_lastUpdate) > updateInterval) {
@@ -144,6 +171,65 @@ class DownloadService {
     final bytes = utf8.encode(originalName);
     final hash = sha256.convert(bytes);
     return hash.toString();
+  }
+
+  // Check if a specific song is downloaded
+  Future<bool> isSongDownloaded(String songId) async {
+    try {
+      final secureDir = await _secureStoragePath;
+      final songFileName = _generateFileName('song_$songId');
+      final songFile = File('$secureDir\\$songFileName');
+      return await songFile.exists();
+    } catch (e) {
+      print('Error checking if song is downloaded: $e');
+      return false;
+    }
+  }
+
+  // Get downloaded album metadata
+  Future<Map<String, dynamic>?> getAlbumMetadata(String albumId) async {
+    try {
+      final metadataBytes = await getDecryptedFile('album_${albumId}_metadata');
+      final metadataJson = utf8.decode(metadataBytes);
+      return json.decode(metadataJson) as Map<String, dynamic>;
+    } catch (e) {
+      print('Error getting album metadata: $e');
+      return null;
+    }
+  }
+
+  // Get all downloaded albums
+  Future<List<Map<String, dynamic>>> getDownloadedAlbums() async {
+    try {
+      final secureDir = await _secureStoragePath;
+      final directory = Directory(secureDir);
+      final List<Map<String, dynamic>> albums = [];
+
+      if (await directory.exists()) {
+        await for (final entity in directory.list()) {
+          if (entity is File && entity.path.contains('metadata')) {
+            try {
+              final fileName = entity.path.split('\\').last;
+              final originalName = fileName.replaceAll(RegExp(r'[a-f0-9]{64}'), '');
+              if (originalName.contains('album_') && originalName.contains('_metadata')) {
+                final albumId = originalName.replaceAll('album_', '').replaceAll('_metadata', '');
+                final metadata = await getAlbumMetadata(albumId);
+                if (metadata != null) {
+                  albums.add(metadata);
+                }
+              }
+            } catch (e) {
+              print('Error processing file ${entity.path}: $e');
+            }
+          }
+        }
+      }
+
+      return albums;
+    } catch (e) {
+      print('Error getting downloaded albums: $e');
+      return [];
+    }
   }
 
   void dispose() {

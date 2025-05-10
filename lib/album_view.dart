@@ -3,6 +3,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:supabase/supabase.dart';
 import 'dart:async';
 import 'dart:ui'; // Add this import for ImageFilter
+import 'dart:io'; // Add this import for InternetAddress
 import 'widgets/queue_list.dart';
 import 'services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
@@ -44,6 +45,8 @@ class _AlbumViewState extends State<AlbumView> {
   bool _isDownloaded = false;
   Map<String, dynamic>? _currentSong; // NEW state variable
 
+  Timer? _downloadProgressTimer;
+
   @override
   void initState() {
     super.initState();
@@ -72,9 +75,24 @@ class _AlbumViewState extends State<AlbumView> {
       }
     });
 
+    // Listen for real-time download progress updates
     _downloadService.downloadProgress.listen((progress) {
       if (mounted) {
-        setState(() => _downloadProgress = progress);
+        setState(() {
+          _downloadProgress = progress;
+          if (progress.containsKey('Total')) {
+            _totalDownloadProgress = progress['Total'] ?? 0.0;
+          }
+        });
+      }
+    });
+
+    // Set up a timer to refresh the download button every 10 seconds
+    _downloadProgressTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted && _isDownloading) {
+        setState(() {
+          // This will trigger a UI refresh of the download button
+        });
       }
     });
   }
@@ -90,6 +108,9 @@ class _AlbumViewState extends State<AlbumView> {
 
   @override
   void dispose() {
+    // Cancel the download progress timer
+    _downloadProgressTimer?.cancel();
+
     // Only clear currentPlayingIndex, don't stop the song
     currentPlayingIndex = null;
     super.dispose();
@@ -121,7 +142,64 @@ class _AlbumViewState extends State<AlbumView> {
     try {
       final isPlaylist = widget.album['playlist_name'] != null;
       final isDynamicPlaylist = widget.album['playlist_type'] != null;
+      final albumId = widget.album['id'].toString();
 
+      // First check if the album is downloaded
+      final isDownloaded = await _downloadService.isAlbumDownloaded(albumId);
+
+      // Check if we're online
+      bool isOnline = false;
+      try {
+        final result = await InternetAddress.lookup('google.com');
+        isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      } catch (e) {
+        // We're offline
+        isOnline = false;
+      }
+
+      // If album is downloaded and we're offline, load from local storage
+      if (isDownloaded && !isOnline) {
+        final albumMetadata = await _downloadService.getAlbumMetadata(albumId);
+
+        if (albumMetadata != null && albumMetadata['songs'] != null) {
+          final downloadedSongs = List<Map<String, dynamic>>.from(albumMetadata['songs']);
+
+          if (mounted) {
+            setState(() {
+              songs = downloadedSongs;
+              isLoading = false;
+              _isDownloaded = true;
+
+              if (widget.currentlyPlayingSong != null) {
+                currentPlayingIndex = songs.indexWhere(
+                  (song) => song['id'] == widget.currentlyPlayingSong!['id']
+                );
+              }
+            });
+          }
+          return;
+        }
+      }
+
+      // If we're offline and the album is not downloaded, show a message
+      if (!isOnline && !isDownloaded) {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+            songs = [];
+          });
+
+          Future.microtask(() {
+            _showErrorMessage(
+              'You\'re offline and this album is not downloaded',
+              isError: true
+            );
+          });
+        }
+        return;
+      }
+
+      // If we're online, proceed with normal loading from Supabase
       // Check authentication first
       final userId = widget.supabaseClient.auth.currentUser?.id;
       if (userId == null) {
@@ -267,26 +345,22 @@ class _AlbumViewState extends State<AlbumView> {
 
   void _playAll() {
     if (songs.isNotEmpty) {
-      //print('Starting album playback with ${songs.length} songs');
-      setState(() {
-        currentPlayingIndex = 0;
-      });
+      currentPlayingIndex = 0;
       _playSong(songs[0]);
-    } else {
-      //print('No songs available to play');
     }
   }
 
   void _playSong(Map<String, dynamic> song) {
-    if (song['audio_url'] == null) {
-      //print('Error: No audio URL for song ${song['title']}');
+    if (song['audio_url'] == null && !_isDownloaded) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cannot play song: Missing audio URL')),
         );
       }
       return;
-    }    try {
+    }
+
+    try {
       // Format queue data first to ensure all songs have required fields
       final formattedQueue = songs.map((s) {
         // Ensure we have the base song data
@@ -310,6 +384,8 @@ class _AlbumViewState extends State<AlbumView> {
           'album': widget.album['playlist_name'] ?? widget.album['title'],
           'album_id': widget.album['id'],
           'duration': duration,
+          'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
+          'filename': _isDownloaded ? 'song_${songData['id']}' : null, // Add filename for downloaded songs
         };
       }).toList();
 
@@ -332,21 +408,17 @@ class _AlbumViewState extends State<AlbumView> {
         'title': song['title'] ?? 'Unknown Title',
         'duration': songDuration,
         'queue': formattedQueue, // Use the formatted queue
+        'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
+        'filename': _isDownloaded ? 'song_${song['id']}' : null, // Add filename for downloaded songs
       };
 
-      //print('Playing song with metadata: $songWithAlbumContext');
-      //print('Queue size: ${formattedQueue.length}');
+      // Update the current song and index
+      _currentSong = songWithAlbumContext;
+      currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
 
+      // Call the parent's callback to play the song
       widget.onSongSelected(songWithAlbumContext);
-
-      if (mounted) {
-        setState(() {
-          _currentSong = songWithAlbumContext;
-          currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
-        });
-      }
     } catch (e) {
-      //print('Error playing song: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error playing song: ${e.toString()}')),
@@ -515,65 +587,102 @@ class _AlbumViewState extends State<AlbumView> {
   }
 
   Widget _buildAlbumCover() {
-    return Container(
-      width: 200,  // Reduced from 232
-      height: 200, // Reduced from 232
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+    return Stack(
+      children: [
+        Container(
+          width: 200,  // Reduced from 232
+          height: 200, // Reduced from 232
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: widget.album['image_url'] != null
-          ? CachedNetworkImage(
-              imageUrl: widget.album['image_url'],
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                color: Colors.grey[900],
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: Colors.grey[800],
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.album, color: Colors.white, size: 50),
-                    SizedBox(height: 8),
-                    Text(
-                      'Image not available',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: widget.album['image_url'] != null
+              ? CachedNetworkImage(
+                  imageUrl: widget.album['image_url'],
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[900],
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[800],
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.album, color: Colors.white, size: 50),
+                        SizedBox(height: 8),
+                        Text(
+                          'Image not available',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                )
+              : Container(
+                  color: Colors.grey[800],
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.album, color: Colors.white, size: 50),
+                      SizedBox(height: 8),
+                      Text(
+                        'No cover image',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+          ),
+        ),
+        // Show download badge if album is downloaded
+        if (_isDownloaded)
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green, width: 1),
               ),
-            )
-          : Container(
-              color: Colors.grey[800],
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.album, color: Colors.white, size: 50),
-                  SizedBox(height: 8),
+                  Icon(
+                    Icons.download_done,
+                    color: Colors.green,
+                    size: 16,
+                  ),
+                  SizedBox(width: 4),
                   Text(
-                    'No cover image',
+                    'Downloaded',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: Colors.white,
                       fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
             ),
-      ),
+          ),
+      ],
     );
   }
 
@@ -881,26 +990,48 @@ class _AlbumViewState extends State<AlbumView> {
               ),
               const SizedBox(width: 20),
               // Song Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: CachedNetworkImage(
-                  imageUrl: entry.value['image_url'] ?? widget.album['image_url'] ?? '',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    width: 40,
-                    height: 40,
-                    color: Colors.grey[850],
-                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: CachedNetworkImage(
+                      imageUrl: entry.value['image_url'] ?? widget.album['image_url'] ?? '',
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 40,
+                        height: 40,
+                        color: Colors.grey[850],
+                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 40,
+                        height: 40,
+                        color: Colors.grey[850],
+                        child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                      ),
+                    ),
                   ),
-                  errorWidget: (context, url, error) => Container(
-                    width: 40,
-                    height: 40,
-                    color: Colors.grey[850],
-                    child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
-                  ),
-                ),
+                  // Show download indicator in the corner if downloaded
+                  if (_isDownloaded)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(
+                          Icons.download_done,
+                          color: Colors.green,
+                          size: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 16),
               // Title and Artist Column - Use Expanded to take available space
@@ -1041,17 +1172,8 @@ class _AlbumViewState extends State<AlbumView> {
     });
 
     try {
-      final totalItems = songs.length + 1; // +1 for album cover
-      var completedItems = 0;
-
-      // Listen to individual file progress
-      _downloadService.downloadProgress.listen((progress) {
-        final currentItemProgress = progress.values.first;
-        setState(() {
-          _totalDownloadProgress = (completedItems + currentItemProgress) / totalItems;
-        });
-      });
-
+      // The download service now handles parallel downloading internally
+      // and sends progress updates through the stream
       await _downloadService.downloadAlbum(widget.album, songs);
 
       setState(() {

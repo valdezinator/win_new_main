@@ -213,77 +213,39 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
 
   void _handleSongCompletion() {
     if (isRepeatEnabled) {
-      // Replay the current song, ensuring its queue context is maintained.
-      // Create a new map to avoid modifying the original widget.song map.
+      // Replay the current song
       final songToReplay = Map<String, dynamic>.from(widget.song);
-      // No need to call _audioService.player.seek(Duration.zero) if playSong handles it
       _audioService.playSong(songToReplay);
     } else if (isShuffleEnabled) {
-      _playRandomSong();
-    } else {
-      _playNextSong();
-    }
-  }
+      // Play a random song from the queue
+      final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
+      if (currentQueue.isEmpty) return;
 
-  void _playRandomSong() {
-    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (currentQueue.isEmpty) return;
+      final random = Random();
+      final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
 
-    final random = Random();
-    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
-
-    if (currentQueue.length == 1 && currentIndex != -1) {
-        // Only one song in queue, replay if shuffle is on (and repeat is off)
+      if (currentQueue.length == 1 && currentIndex != -1) {
+        // Only one song in queue, replay if shuffle is on
         final songToReplay = Map<String, dynamic>.from(widget.song);
         _audioService.playSong(songToReplay);
         return;
-    }
-    if (currentQueue.length <= 1) return; // Not enough songs to shuffle to a different one
+      }
+      if (currentQueue.length <= 1) return; // Not enough songs to shuffle
 
-    int nextIndex;
-    do {
-      nextIndex = random.nextInt(currentQueue.length);
-    } while (nextIndex == currentIndex); // Ensure it's a different song
+      int nextIndex;
+      do {
+        nextIndex = random.nextInt(currentQueue.length);
+      } while (nextIndex == currentIndex); // Ensure it's a different song
 
-    final Map<String, dynamic> nextRandomSongDetails = Map<String, dynamic>.from(currentQueue[nextIndex]);
-    final Map<String, dynamic> songToPlay = {
-      ...nextRandomSongDetails,
-      'queue': currentQueue, // Pass the full original queue
-    };
-    _audioService.playSong(songToPlay);
-  }
-
-  void _playNextSong() {
-    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (currentQueue.isEmpty) return;
-
-    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
-
-    if (currentIndex != -1 && currentIndex < currentQueue.length - 1) {
-      final Map<String, dynamic> nextSongDetails = Map<String, dynamic>.from(currentQueue[currentIndex + 1]);
+      final Map<String, dynamic> nextRandomSongDetails = Map<String, dynamic>.from(currentQueue[nextIndex]);
       final Map<String, dynamic> songToPlay = {
-        ...nextSongDetails,
-        'queue': currentQueue, // Pass the full current queue
+        ...nextRandomSongDetails,
+        'queue': currentQueue, // Pass the full original queue
       };
       _audioService.playSong(songToPlay);
-    }
-    // If at the end of the queue and not repeating, playback will stop.
-    // Playlist repeat logic (repeating the whole queue) would go here if isRepeatEnabled had a playlist mode.
-  }
-
-  void _playPreviousSong() {
-    final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
-    if (currentQueue.isEmpty) return;
-
-    final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
-
-    if (currentIndex > 0) { // Ensure there is a previous song
-      final Map<String, dynamic> prevSongDetails = Map<String, dynamic>.from(currentQueue[currentIndex - 1]);
-      final Map<String, dynamic> songToPlay = {
-        ...prevSongDetails,
-        'queue': currentQueue, // Pass the full current queue
-      };
-      _audioService.playSong(songToPlay);
+    } else {
+      // Play the next song
+      _audioService.playNext();
     }
   }
 
@@ -314,7 +276,7 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   }
 
   void _handleNext() {
-    _playNextSong();
+    _audioService.playNext();
 
     // Update jam session if host
     if (_isInJamSession && _jamSessionService.isHost) {
@@ -323,7 +285,7 @@ class _MusicPlayerState extends State<MusicPlayer> with SingleTickerProviderStat
   }
 
   void _handlePrevious() {
-    _playPreviousSong();
+    _audioService.playPrevious();
 
     // Update jam session if host
     if (_isInJamSession && _jamSessionService.isHost) {
