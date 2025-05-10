@@ -4,16 +4,18 @@ import 'browse_screen.dart';
 import 'album_view.dart';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
+import 'services/dynamic_playlist_service.dart';
 import 'library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:http/http.dart' as http; // NEW import
-import 'dart:convert'; // NEW import
-import 'package:flutter_svg/flutter_svg.dart'; // Add this import
-import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'profile_screen.dart';
 import 'layouts/content_view.dart';
+import 'widgets/dynamic_playlists_section.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -32,14 +34,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  final SupabaseClient supabaseClient = SupabaseClient(
-    'https://yaysfbsmvtyqpbfhxstj.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlheXNmYnNtdnR5cXBiZmh4c3RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI0NDQ3NDgsImV4cCI6MjA0ODAyMDc0OH0.7d_RsoyQ5RN6Whj6flbd5W0CSLiUpJ6HfRFVEnQKsf8'
-  );
+  // Use the global Supabase instance to ensure authentication state is shared
+  final SupabaseClient supabaseClient = Supabase.instance.client;
   late TabController _tabController;
   Map<String, dynamic>? _currentSong;
   bool showQueue = false;
   final AudioService _audioService = AudioService();
+  final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -55,6 +56,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _setupAudioListener();
     _initializeLastPlayedSong();
     _initializeJamSessionService();
+    _initializeDynamicPlaylistService();
+
+    // Debug: Check authentication state
+    final user = supabaseClient.auth.currentUser;
+    print('HomeScreen - Current user: ${user?.id}');
+    print('HomeScreen - Is authenticated: ${user != null}');
+  }
+
+  void _initializeDynamicPlaylistService() async {
+    await _dynamicPlaylistService.initialize();
   }
 
   // Initialize JamSessionService with the current user ID
@@ -83,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Call super.dispose() first
     super.dispose();
     _tabController.dispose();
+    _dynamicPlaylistService.dispose();
 
     // Save current song state after disposing
     if (_currentSong != null) {
@@ -97,21 +109,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await prefs.setString('last_played_song', json.encode(_currentSong));
     await prefs.setBool('was_playing', _audioService.isPlaying);
   }
-
   Future<List<Map<String, dynamic>>> fetchSongs() async {
     try {
       final response = await supabaseClient
-          .from('songs')
-          .select()
+          .from('songs_2')
+          .select('id, title, artist, audio_url, image_url, duration')
           .order('created_at');
 
       if (response.isEmpty) {
         throw Exception('No data received from Supabase');
       }
 
-      return List<Map<String, dynamic>>.from(response as List);
+      print('Fetched ${(response as List).length} songs from songs_2 table');
+
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      //print('Error fetching songs: $e');
+      print('Error fetching songs: $e');
       rethrow;
     }
   }
@@ -151,12 +164,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return [];
     }
   }
-
   Future<List<Map<String, dynamic>>> fetchTrendingNow() async {
     try {
       final response = await supabaseClient
-          .from('songs')
-          .select()
+          .from('songs_2')
+          .select('id, title, artist, audio_url, image_url, duration, play_count')
           .order('play_count', ascending: false)
           .limit(10);
       final trendingList = List<Map<String, dynamic>>.from(response);
@@ -521,10 +533,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildHomeContent() {
     return SingleChildScrollView(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, _currentSong != null ? 124.0 : 24.0), // Adjust bottom padding
+        padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, _currentSong != null ? 124.0 : 24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // Add this
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Greeting Section
             Text(
@@ -537,6 +549,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 32),
+
+            // Dynamic Playlists Section
+            DynamicPlaylistsSection(
+              onPlaylistSelected: (playlist) {
+                // Authentication is already checked in DynamicPlaylistsSection
+                // before this callback is called
+
+                // Use ContentViewController to navigate to the playlist view
+                // This keeps the main layout consistent (sidebar and player)
+                _navigateToAlbum(playlist);
+              },
+            ),
+            const SizedBox(height: 40),
 
             // Quick Play Section
             Row(

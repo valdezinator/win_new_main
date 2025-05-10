@@ -49,18 +49,33 @@ class _AlbumViewState extends State<AlbumView> {
     super.initState();
     _currentSong = widget.currentlyPlayingSong; // initialize with parent's value
     _loadPalette();
-    _loadSongs().then((_) {
-      if (_currentSong != null) {
-        setState(() {
-          // Update currentPlayingIndex if needed
-          // Assuming that _currentSong exists in songs:
-          // (Keep existing logic if desired)
+
+    // Debug: Check authentication state
+    final user = widget.supabaseClient.auth.currentUser;
+    print('AlbumView - Current user: ${user?.id}');
+    print('AlbumView - Is authenticated: ${user != null}');
+    print('AlbumView - Album data: ${widget.album}');
+
+    // Delay loading songs to ensure initState is complete
+    Future.microtask(() {
+      if (mounted) {
+        _loadSongs().then((_) {
+          if (_currentSong != null && mounted) {
+            setState(() {
+              // Update currentPlayingIndex if needed
+              // Assuming that _currentSong exists in songs:
+              // (Keep existing logic if desired)
+            });
+          }
+          _checkDownloadState();
         });
       }
-      _checkDownloadState();
     });
+
     _downloadService.downloadProgress.listen((progress) {
-      setState(() => _downloadProgress = progress);
+      if (mounted) {
+        setState(() => _downloadProgress = progress);
+      }
     });
   }
 
@@ -88,55 +103,165 @@ class _AlbumViewState extends State<AlbumView> {
         _palette = paletteGenerator;
       });
     }
+  }  // Helper method to show error messages after widget is fully initialized
+  void _showErrorMessage(String message, {bool isError = true}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red : Colors.black87,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
+
   Future<void> _loadSongs() async {
+    setState(() => isLoading = true);
     try {
       final isPlaylist = widget.album['playlist_name'] != null;
+      final isDynamicPlaylist = widget.album['playlist_type'] != null;
 
-      final response = isPlaylist
+      // Check authentication first
+      final userId = widget.supabaseClient.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() {
+          isLoading = false;
+          songs = [];
+        });
+        // Don't show error message here - will be handled after initState completes
+        throw Exception('User not logged in');
+      }
+
+      final response = isDynamicPlaylist
           ? await widget.supabaseClient
-              .from('playlist_songs')
-              .select('*, songs_2!inner(*)')
-              .eq('playlist_id', widget.album['id'])
-              .order('added_at', ascending: false)
-          : await widget.supabaseClient
-              .from('songs_2')
-              .select()
-              .eq('album_id', widget.album['id']);      
-              // //print('Response from Supabase: $response');
+              .from('dynamic_playlist_songs')
+              .select('''
+                songs_2!inner (
+                  id,
+                  title,
+                  artist,
+                  audio_url,
+                  image_url,
+                  duration
+                ),
+                dynamic_playlists!inner (
+                  id,
+                  user_id,
+                  playlist_type
+                )
+              ''')
+              .eq('dynamic_playlists.id', widget.album['id'])
+              .eq('dynamic_playlists.user_id', userId)
+          : isPlaylist
+              ? await widget.supabaseClient
+                  .from('playlist_songs')
+                  .select('''
+                    *,
+                    songs_2!inner (
+                      id,
+                      title,
+                      artist,
+                      audio_url,
+                      image_url,
+                      duration
+                    )
+                  ''')
+                  .eq('playlist_id', widget.album['id'])
+                  .order('added_at', ascending: false)
+              : await widget.supabaseClient
+                  .from('songs_2')
+                  .select()
+                  .eq('album_id', widget.album['id']);
 
-      // Validate audio URLs before setting state
-      final validSongs = List<Map<String, dynamic>>.from(response).map((song) {
-        // For playlist songs, the actual song data is nested in the songs_2 field
-        final songData = song['songs_2'] ?? song;
-        //print('Song ${songData['title']} audio URL: ${songData['audio_url']}');
-        return {
-          ...Map<String, dynamic>.from(songData),
-          'id': songData['id'],
-          'title': songData['title'],
-          'artist': songData['artist'] ?? widget.album['artist'],
-          'audio_url': songData['audio_url'],
-          'image_url': songData['image_url'] ?? widget.album['image_url'],
-          'duration': songData['duration'],
-        };
-      }).toList();
+      // Handle empty response
+      if ((response as List).isEmpty) {
+        setState(() {
+          songs = [];
+          isLoading = false;
+        });
 
-      setState(() {
-        songs = validSongs;
-        isLoading = false;
-
-        if (widget.currentlyPlayingSong != null) {
-          currentPlayingIndex = songs.indexWhere(
-            (song) => song['id'] == widget.currentlyPlayingSong!['id']
+        // Schedule error message to be shown after initState completes
+        Future.microtask(() {
+          _showErrorMessage(
+            'No songs found in this ${isDynamicPlaylist ? 'playlist' : 'album'}',
+            isError: false
           );
-          //print('Found currently playing song at index: $currentPlayingIndex');
-        }
-      });
+        });
+        return;
+      }
+
+      // Process and validate the songs
+      final validSongs = (response as List)
+          .map((song) {
+            Map<String, dynamic>? songData;
+            if (isDynamicPlaylist) {
+                songData = song['songs_2'];
+            } else if (isPlaylist) {
+                songData = song['songs_2'];
+            } else {
+                songData = song;
+            }
+
+            if (songData == null || songData['audio_url'] == null) {
+              return null;
+            }
+
+            // Clean and validate the image URL
+            String? imageUrl = songData['image_url'] ?? widget.album['image_url'];
+            if (imageUrl != null) {
+              // Remove any trailing '?' from the image URL
+              imageUrl = imageUrl.endsWith('?') ? imageUrl.substring(0, imageUrl.length - 1) : imageUrl;
+              // Ensure URL is valid
+              try {
+                final uri = Uri.parse(imageUrl);
+                if (!uri.hasScheme || !uri.hasAuthority) {
+                  imageUrl = null;
+                }
+              } catch (e) {
+                // Log invalid image URL
+                imageUrl = null;
+              }
+            }
+
+            return {
+              'id': songData['id'],
+              'title': songData['title'] ?? 'Unknown Title',
+              'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+              'audio_url': songData['audio_url'],
+              'image_url': imageUrl,
+              'duration': songData['duration'],
+              'position': song['position'], // For dynamic playlists
+            };
+          })
+          .where((song) => song != null)
+          .cast<Map<String, dynamic>>()
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          songs = validSongs;
+          isLoading = false;
+
+          if (widget.currentlyPlayingSong != null) {
+            currentPlayingIndex = songs.indexWhere(
+              (song) => song['id'] == widget.currentlyPlayingSong!['id']
+            );
+          }
+        });
+      }
     } catch (e) {
-      //print('Error loading songs: $e');
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          songs = [];
+        });
+
+        // Schedule error message to be shown after initState completes
+        Future.microtask(() {
+          _showErrorMessage('Error loading songs: $e');
+        });
+      }
     }
   }
 
@@ -166,7 +291,7 @@ class _AlbumViewState extends State<AlbumView> {
       final formattedQueue = songs.map((s) {
         // Ensure we have the base song data
         final songData = s['songs_2'] ?? s;
-        
+
         // Convert duration to integer if it's a string
         var duration = songData['duration'];
         if (duration is String && duration.contains(':')) {
@@ -907,11 +1032,7 @@ class _AlbumViewState extends State<AlbumView> {
     );
   }
 
-  void _toggleQueue(bool show) {
-    setState(() {
-      showQueue = show;
-    });
-  }
+  // This method is now used directly in the UI with setState
 
   Future<void> _downloadAlbum() async {
     setState(() {
