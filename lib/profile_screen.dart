@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform, Directory;
 
 // Define AudioQuality enum for consistent usage
 enum AudioQuality {
@@ -121,6 +123,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // Open Premium Plans webpage in default browser
+  Future<void> _openPremiumPlans() async {
+    // Use a local file path that will be created in the project directory
+    final Uri url = Uri.parse('file://${Platform.isWindows ? '/' : ''}${Directory.current.path}/assets/premium_plans.html');
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open Premium Plans page')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -176,6 +199,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: const Text('Sign out',
                           style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+                      ),
+                    ),
+                    const Divider(color: Colors.white24, height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.workspace_premium, color: Colors.amber, size: 28),
+                      title: const Text('Premium Features',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Unlock all premium features',
+                        style: TextStyle(color: Colors.white54, fontSize: 14)),
+                      trailing: ElevatedButton(
+                        onPressed: _openPremiumPlans,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Get Premium', style: TextStyle(fontWeight: FontWeight.bold)),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward, size: 16),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -382,6 +433,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           trailing: TextButton(
             onPressed: _signOut,
             child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+          title: const Text('Premium Features', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Unlock all premium features', style: TextStyle(color: Colors.white54)),
+          trailing: ElevatedButton(
+            onPressed: _openPremiumPlans,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: 4,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Get Premium', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_forward, size: 14),
+              ],
+            ),
           ),
         ),
         const Divider(color: Colors.white24),

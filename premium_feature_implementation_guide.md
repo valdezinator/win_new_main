@@ -1,0 +1,552 @@
+# Get Premium Feature Implementation Guide
+
+This guide documents the implementation of a "Get Premium" feature for a music streaming desktop application built with Flutter. The feature includes an interactive button in the profile screen that opens a responsive Premium Plans webpage in the user's default browser.
+
+## Overview of Changes
+
+### Modified Files:
+- `lib/profile_screen.dart`: Added "Get Premium" button and URL launcher functionality
+
+### New Files:
+- `assets/premium_plans.html`: Created responsive Premium Plans webpage
+
+## Detailed Implementation Steps
+
+### 1. Add Required Imports to Profile Screen
+
+```dart
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform, Directory;
+```
+
+### 2. Add Method to Open Premium Plans Webpage
+
+Add this method to the profile screen state class:
+
+```dart
+// Open Premium Plans webpage in default browser
+Future<void> _openPremiumPlans() async {
+  // Use a local file path that will be created in the project directory
+  final Uri url = Uri.parse('file://${Platform.isWindows ? '/' : ''}${Directory.current.path}/assets/premium_plans.html');
+  try {
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Premium Plans page')),
+        );
+      }
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+}
+```
+
+### 3. Add "Get Premium" Button to Desktop Layout
+
+Add this ListTile to the Account section in the desktop layout:
+
+```dart
+const Divider(color: Colors.white24, height: 1),
+ListTile(
+  leading: const Icon(Icons.workspace_premium, color: Colors.amber, size: 28),
+  title: const Text('Premium Features',
+    style: TextStyle(color: Colors.white, fontSize: 16)),
+  subtitle: const Text('Unlock all premium features',
+    style: TextStyle(color: Colors.white54, fontSize: 14)),
+  trailing: ElevatedButton(
+    onPressed: _openPremiumPlans,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _accentColor,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      elevation: 4,
+    ),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Get Premium', style: TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(width: 4),
+        Icon(Icons.arrow_forward, size: 16),
+      ],
+    ),
+  ),
+),
+```
+
+### 4. Add "Get Premium" Button to Mobile Layout
+
+Add this ListTile to the Account section in the mobile layout:
+
+```dart
+ListTile(
+  leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+  title: const Text('Premium Features', style: TextStyle(color: Colors.white)),
+  subtitle: const Text('Unlock all premium features', style: TextStyle(color: Colors.white54)),
+  trailing: ElevatedButton(
+    onPressed: _openPremiumPlans,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _accentColor,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      elevation: 4,
+    ),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Get Premium', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        SizedBox(width: 4),
+        Icon(Icons.arrow_forward, size: 14),
+      ],
+    ),
+  ),
+),
+```
+
+### 5. Create Premium Plans HTML Page
+
+Create a new file `assets/premium_plans.html` with the following content:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Plans - Music Streaming</title>
+    <style>
+        :root {
+            --background-color: #0C0F14;
+            --card-bg-color: rgba(0, 0, 0, 0.3);
+            --text-color: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --accent-color: #7c4dff; /* Default accent color (deep purple) */
+            --card-border: rgba(255, 255, 255, 0.1);
+            --hover-color: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background-image: linear-gradient(to bottom, rgba(124, 77, 255, 0.2), rgba(0, 0, 0, 0.8));
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 300;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .currency-selector {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .currency-btn {
+            background-color: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .currency-btn:hover {
+            background-color: var(--hover-color);
+        }
+
+        .currency-btn.active {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .plans-container {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .plan-card {
+            background-color: var(--card-bg-color);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 300px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .plan-card.popular::before {
+            content: "Most Popular";
+            position: absolute;
+            top: 10px;
+            right: -30px;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 5px 40px;
+            transform: rotate(45deg);
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .plan-price .period {
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .plan-features {
+            list-style: none;
+            padding: 0;
+            margin: 1.5rem 0;
+        }
+
+        .plan-features li {
+            padding: 0.5rem 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .plan-features li::before {
+            content: "✓";
+            color: var(--accent-color);
+            margin-right: 0.5rem;
+            font-weight: bold;
+        }
+
+        .subscribe-btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .subscribe-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .plan-card {
+                width: 100%;
+                max-width: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Premium Plans</h1>
+            <div class="subtitle">Choose the perfect plan for your listening needs</div>
+
+            <div class="currency-selector">
+                <button class="currency-btn active" data-currency="USD">USD</button>
+                <button class="currency-btn" data-currency="EUR">EUR</button>
+                <button class="currency-btn" data-currency="INR">INR</button>
+                <button class="currency-btn" data-currency="GBP">GBP</button>
+            </div>
+        </header>
+
+        <div class="plans-container">
+            <!-- Single Plan -->
+            <div class="plan-card">
+                <div class="plan-name">Single</div>
+                <div class="plan-price">
+                    <span class="amount">$9.99</span>
+                    <span class="period">/month</span>
+                </div>
+                <div>1 account</div>
+                <ul class="plan-features">
+                    <li>Ad-free music listening</li>
+                    <li>Download songs for offline</li>
+                    <li>High quality audio</li>
+                    <li>Unlimited skips</li>
+                </ul>
+                <button class="subscribe-btn">
+                    Subscribe
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Duo Plan -->
+            <div class="plan-card popular">
+                <div class="plan-name">Duo</div>
+                <div class="plan-price">
+                    <span class="amount">$14.99</span>
+                    <span class="period">/month</span>
+                </div>
+                <div>2 accounts</div>
+                <ul class="plan-features">
+                    <li>Ad-free music listening</li>
+                    <li>Download songs for offline</li>
+                    <li>High quality audio</li>
+                    <li>Unlimited skips</li>
+                    <li>Shared playlists</li>
+                </ul>
+                <button class="subscribe-btn">
+                    Subscribe
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Family Plan -->
+            <div class="plan-card">
+                <div class="plan-name">Family</div>
+                <div class="plan-price">
+                    <span class="amount">$19.99</span>
+                    <span class="period">/month</span>
+                </div>
+                <div>Up to 6 accounts</div>
+                <ul class="plan-features">
+                    <li>Ad-free music listening</li>
+                    <li>Download songs for offline</li>
+                    <li>High quality audio</li>
+                    <li>Unlimited skips</li>
+                    <li>Shared playlists</li>
+                    <li>Parental controls</li>
+                </ul>
+                <button class="subscribe-btn">
+                    Subscribe
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2024 Music Streaming App. All rights reserved.
+    </footer>
+
+    <script>
+        // Currency conversion rates (approximate)
+        const rates = {
+            USD: 1,
+            EUR: 0.92,
+            INR: 83.5,
+            GBP: 0.79
+        };
+
+        // Plan prices in USD
+        const prices = {
+            single: 9.99,
+            duo: 14.99,
+            family: 19.99
+        };
+
+        // Currency symbols
+        const symbols = {
+            USD: '$',
+            EUR: '€',
+            INR: '₹',
+            GBP: '£'
+        };
+
+        // Get all currency buttons
+        const currencyButtons = document.querySelectorAll('.currency-btn');
+
+        // Get all price elements
+        const priceElements = document.querySelectorAll('.plan-price .amount');
+
+        // Function to update prices based on selected currency
+        function updatePrices(currency) {
+            const rate = rates[currency];
+            const symbol = symbols[currency];
+
+            // Update each price
+            priceElements[0].textContent = `${symbol}${(prices.single * rate).toFixed(2)}`;
+            priceElements[1].textContent = `${symbol}${(prices.duo * rate).toFixed(2)}`;
+            priceElements[2].textContent = `${symbol}${(prices.family * rate).toFixed(2)}`;
+
+            // Save preference
+            localStorage.setItem('preferredCurrency', currency);
+        }
+
+        // Add click event to currency buttons
+        currencyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all buttons
+                currencyButtons.forEach(btn => btn.classList.remove('active'));
+
+                // Add active class to clicked button
+                button.classList.add('active');
+
+                // Update prices
+                updatePrices(button.dataset.currency);
+            });
+        });
+
+        // Load saved preference or default to USD
+        const savedCurrency = localStorage.getItem('preferredCurrency') || 'USD';
+
+        // Set the active button based on saved preference
+        currencyButtons.forEach(button => {
+            if (button.dataset.currency === savedCurrency) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+
+        // Update prices with saved preference
+        updatePrices(savedCurrency);
+    </script>
+</body>
+</html>
+```
+
+## Dependencies
+
+Make sure to add the following dependencies to your `pubspec.yaml` file:
+
+```yaml
+dependencies:
+  url_launcher: ^6.2.5
+```
+
+## Directory Structure
+
+Ensure you have the following directory structure:
+
+```
+your_project/
+├── lib/
+│   └── profile_screen.dart (modified)
+└── assets/
+    └── premium_plans.html (new file)
+```
+
+## Implementation Notes
+
+1. **URL Launcher Configuration**:
+   - For Android, add the following to your `AndroidManifest.xml` file:
+     ```xml
+     <queries>
+       <intent>
+         <action android:name="android.intent.action.VIEW" />
+         <data android:scheme="https" />
+       </intent>
+     </queries>
+     ```
+   - For iOS, add the following to your `Info.plist` file:
+     ```xml
+     <key>LSApplicationQueriesSchemes</key>
+     <array>
+       <string>https</string>
+       <string>http</string>
+     </array>
+     ```
+
+2. **Assets Directory**:
+   - Make sure to create the `assets` directory if it doesn't exist
+   - You may need to update your `pubspec.yaml` to include the assets directory:
+     ```yaml
+     flutter:
+       assets:
+         - assets/
+     ```
+
+3. **Customization**:
+   - Adjust the accent color in the HTML file to match your app's theme
+   - Update the pricing information as needed
+   - Modify the features list for each subscription tier
+
+## Testing
+
+To test the implementation:
+1. Navigate to the Profile/Settings screen in the app
+2. Look for the "Get Premium" button in the Account section
+3. Click the button to open the Premium Plans webpage in your default browser
+4. On the Premium Plans page, try switching between different currencies to see the prices update
+5. Verify that the page is responsive by resizing your browser window
