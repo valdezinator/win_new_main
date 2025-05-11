@@ -3,29 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-// Define AudioQuality enum for consistent usage
-enum AudioQuality {
-  low('Low'),
-  medium('Medium'),
-  high('High'),
-  lossless('Lossless');
-
-  final String label;
-  const AudioQuality(this.label);
-
-  static AudioQuality fromString(String value) {
-    return AudioQuality.values.firstWhere(
-      (quality) => quality.label.toLowerCase() == value.toLowerCase(),
-      orElse: () => AudioQuality.high,
-    );
-  }
-}
-
 /// SettingsScreen: Comprehensive settings page for the music app
 /// Sections: Account, Playback, Notifications, Appearance, Privacy, About
 class SettingsScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
-  const SettingsScreen({super.key, required this.supabaseClient});
+  const SettingsScreen({Key? key, required this.supabaseClient}) : super(key: key);
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -35,7 +17,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Playback settings
   bool _crossfade = false;
   bool _gapless = false;
-  AudioQuality _audioQuality = AudioQuality.high;
+  String _audioQuality = 'High';
   bool _wifiOnly = true;
 
   // Notification settings
@@ -64,12 +46,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _fetchUserProfile();
     _getAppVersion();
   }
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _crossfade = prefs.getBool('crossfade') ?? false;
       _gapless = prefs.getBool('gapless') ?? false;
-      _audioQuality = AudioQuality.fromString(prefs.getString('audio_quality') ?? 'High');
+      _audioQuality = prefs.getString('audio_quality') ?? 'High';
       _wifiOnly = prefs.getBool('wifi_only') ?? true;
       _notifyNewReleases = prefs.getBool('notify_new_releases') ?? true;
       _notifyPlaylistUpdates = prefs.getBool('notify_playlist_updates') ?? true;
@@ -160,21 +143,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Gapless Playback', style: TextStyle(color: Colors.white)),
             subtitle: const Text('No silence between tracks'),
             activeColor: _accentColor,
-          ),          ListTile(
+          ),
+          ListTile(
             title: const Text('Audio Quality', style: TextStyle(color: Colors.white)),
-            subtitle: Text(_audioQuality.label, style: const TextStyle(color: Colors.white54)),
-            trailing: DropdownButton<AudioQuality>(
+            subtitle: Text(_audioQuality, style: const TextStyle(color: Colors.white54)),
+            trailing: DropdownButton<String>(
               value: _audioQuality,
               dropdownColor: Colors.grey[900],
-              items: AudioQuality.values
-                  .map((q) => DropdownMenuItem(value: q, child: Text(q.label)))
+              items: ['Low', 'Medium', 'High', 'Lossless']
+                  .map((q) => DropdownMenuItem(value: q, child: Text(q)))
                   .toList(),
-              onChanged: (v) { 
-                if (v != null) { 
-                  setState(() => _audioQuality = v); 
-                  _saveSetting('audio_quality', v.label); 
-                } 
-              },
+              onChanged: (v) { if (v != null) { setState(() => _audioQuality = v); _saveSetting('audio_quality', v); } },
             ),
           ),
           SwitchListTile(
@@ -247,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('Manage Data', style: TextStyle(color: Colors.white)),
             subtitle: const Text('View or delete your data'),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+            trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
             onTap: () {
               // TODO: Implement data management
               ScaffoldMessenger.of(context).showSnackBar(
@@ -265,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('Licenses', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+            trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
             onTap: () => showLicensePage(context: context),
           ),
         ],

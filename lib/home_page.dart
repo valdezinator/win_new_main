@@ -553,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           currentlyPlayingSong: _currentSong,
           onAlbumSelected: _navigateToAlbum,
         ),
-        ProfileScreen(supabaseClient: supabaseClient),
+        SettingsScreen(supabaseClient: supabaseClient),
       ],
     );
   }

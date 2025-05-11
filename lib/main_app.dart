@@ -108,7 +108,7 @@ class _MainAppState extends State<MainApp> {
         break;
       case ContentType.profile:
         // Show the profile screen
-        content = ProfileScreen(
+        content = SettingsScreen(
           supabaseClient: supabaseClient,
         );
         break;
