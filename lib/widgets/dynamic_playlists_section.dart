@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/dynamic_playlist_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class DynamicPlaylistsSection extends StatefulWidget {
   final Function(Map<String, dynamic>) onPlaylistSelected;
@@ -92,7 +93,11 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
             children: [
               Text(
                 'Your Daily Mix',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: GoogleFonts.montserrat(
+                  color: Colors.white,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w300,
+                ),
               ),
               ValueListenableBuilder<bool>(
                 valueListenable: _playlistService.isRefreshing,

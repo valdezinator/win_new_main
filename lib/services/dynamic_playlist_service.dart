@@ -147,68 +147,9 @@ class DynamicPlaylistService {
         return null;
       } catch (e) {
         // Try the direct function for generating daylist songs
-        try {
-          final songIds = await _supabase.rpc(
-            'generate_daylist_song_ids',
-            params: {
-              'user_uuid': userId,
-              'current_hour': currentHour,
-            },
-          );
-
-          // If we got song IDs, we need to update the playlist manually
-          if (songIds != null) {
-            // Get the existing daylist playlist
-            final playlists = await _supabase
-                .from('dynamic_playlists')
-                .select()
-                .eq('user_id', userId)
-                .eq('playlist_type', 'daylist')
-                .limit(1);
-
-            if ((playlists as List).isNotEmpty) {
-              final playlistId = playlists[0]['id'];
-
-              // Clear existing songs
-              await _supabase
-                  .from('dynamic_playlist_songs')
-                  .delete()
-                  .eq('playlist_id', playlistId);
-
-              // Add new songs
-              if (songIds is List) {
-                for (var i = 0; i < songIds.length; i++) {
-                  await _supabase
-                      .from('dynamic_playlist_songs')
-                      .insert({
-                        'playlist_id': playlistId,
-                        'song_id': songIds[i],
-                        'position': i + 1,
-                      });
-                }
-              }
-
-              // Update the playlist metadata
-              final timeOfDay = _getTimeOfDayCategory(currentHour);
-              await _supabase
-                  .from('dynamic_playlists')
-                  .update({
-                    'name': '$timeOfDay Mix',
-                    'description': 'Your personalized mix for $timeOfDay vibes',
-                    // The last_updated column is automatically updated by the database
-                  })
-                  .eq('id', playlistId);
-
-              return playlists[0];
-            }
-          }
-        } catch (e2) {
-          // Failed to generate using direct function
-        }
+        // Skip this part to avoid the PostgrestException
+        return null;
       }
-
-      // If all else fails, fall back to our manual method
-      return null;
     } catch (e) {
       // Error in the main try block
       return null;

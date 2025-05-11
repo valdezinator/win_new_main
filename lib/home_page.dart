@@ -17,6 +17,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'profile_screen.dart';
 import 'layouts/content_view.dart';
 import 'widgets/dynamic_playlists_section.dart';
+import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -348,10 +349,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           children: [
                             Text(
                               album['title'] ?? 'No Title',
-                              style: const TextStyle(
+                              style: GoogleFonts.montserrat(
                                 color: Colors.white,
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w300,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -524,7 +525,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.grey,
                   fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.w300 : FontWeight.normal,
                 ),
               ),
             ],
@@ -568,9 +569,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Greeting Section
             Text(
               'Greetings, $userName',
-              style: const TextStyle(
+              style: GoogleFonts.montserrat(
                 fontSize: 32,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w300,
                 color: Colors.white,
                 letterSpacing: -0.5,
               ),
@@ -594,11 +595,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Quick Play',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
@@ -668,11 +669,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Just the Hits',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
@@ -714,11 +715,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'New Releases',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
@@ -770,11 +771,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Downloaded Albums',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
@@ -842,11 +843,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Recommended Artists',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
@@ -942,7 +943,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       height: 20, // Fixed height for title
                       child: Text(
                         song['title'] ?? 'Unknown Title',
-                        style: const TextStyle(
+                        style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -975,6 +976,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHitAlbumCard(Map<String, dynamic> album) {
+    final bool isDownloaded = album['downloaded'] == true || album['category']?.toString().contains('downloaded') == true;
+
     return GestureDetector(
       onTap: () {
         // Use the ContentViewController to navigate to the album view
@@ -1042,6 +1045,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  // Show download badge if album is downloaded
+                  if (isDownloaded)
+                    Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green, width: 1),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.download_done,
+                              color: Colors.green,
+                              size: 16,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Downloaded',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1056,10 +1092,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     height: 20, // Fixed height for title
                     child: Text(
                       album['title'] ?? 'Unknown',
-                      style: const TextStyle(
+                      style: GoogleFonts.montserrat(
                         color: Colors.white,
                         fontSize: 14, // Reduced font size
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w300,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1082,8 +1118,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ],
-        )
         ),
+      ),
     );
   }
 
@@ -1296,10 +1332,10 @@ class _NewReleaseItemState extends State<NewReleaseItem> {
                 children: [
                   Text(
                     widget.title,
-                    style: const TextStyle(
+                    style: GoogleFonts.montserrat(
                       color: Colors.white,
                       fontSize: 14, // Reduced font size
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w300,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1371,7 +1407,7 @@ class ArtistDetailsPage extends StatelessWidget {
                   left: 20,
                   child: Text(
                     artist['name'] ?? 'Artist Name',
-                    style: const TextStyle(
+                    style: GoogleFonts.montserrat(
                       color: Colors.white,
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

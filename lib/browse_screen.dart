@@ -30,8 +30,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   bool showQueue = false;
 
   // Tab controller for the search results tabs
-  late TabController _tabController;
-  int _selectedTabIndex = 0;
+  // late TabController _tabController;
+  // int _selectedTabIndex = 0;
+
+  // Replace TabBar with chip filters
+  final List<String> _filters = ['All', 'Songs', 'Artists', 'Albums', 'Playlists'];
+  int _selectedFilterIndex = 0;
 
   // Hover state for song items
   int? _hoveredSongIndex;
@@ -39,16 +43,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    // Initialize tab controller
-    _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedTabIndex = _tabController.index;
-        });
-      }
-    });
-
+    // Remove TabController initialization
+    // _tabController = TabController(length: 5, vsync: this);
+    // _tabController.addListener(() {
+    //   if (!_tabController.indexIsChanging) {
+    //     setState(() {
+    //       _selectedTabIndex = _tabController.index;
+    //     });
+    //   }
+    // });
     _loadAlbums();
     // Initialize current playing index if a song is playing
     if (widget.currentlyPlayingSong != null) {
@@ -58,7 +61,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
-    _tabController.dispose();
+    // Remove _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -517,9 +520,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       children: [
         Column(
           children: [
-            // Search Bar with Tabs
+            // Search Bar with Chips
             Container(
-              color: Colors.black.withOpacity(0.3),
+              // color: Colors.black.withOpacity(0.3),
               child: Column(
                 children: [
                   // Search Bar
@@ -545,31 +548,40 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       ),
                     ),
                   ),
-
-                  // Tabs
+                  // Chip Filters
                   if (_searchController.text.isNotEmpty)
-                    TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      indicatorColor: Colors.green,
-                      indicatorWeight: 3,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.grey[400],
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    SizedBox(
+                      height: 48,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: _filters.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, idx) {
+                          final selected = _selectedFilterIndex == idx;
+                          return ChoiceChip(
+                            label: Text(
+                              _filters[idx],
+                              style: TextStyle(
+                                color: selected ? Colors.white : const Color.fromARGB(255, 0, 0, 0),
+                                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            selected: selected,
+                            selectedColor: Colors.green,
+                            backgroundColor: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.08),
+                            onSelected: (val) {
+                              setState(() {
+                                _selectedFilterIndex = idx;
+                              });
+                            },
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          );
+                        },
                       ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.normal,
-                        fontSize: 14,
-                      ),
-                      tabs: const [
-                        Tab(text: 'All'),
-                        Tab(text: 'Songs'),
-                        Tab(text: 'Artists'),
-                        Tab(text: 'Albums'),
-                        Tab(text: 'Playlists'),
-                      ],
                     ),
                 ],
               ),
@@ -655,25 +667,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
 
-    return TabBarView(
-      controller: _tabController,
-      children: [
-        // All Results Tab
-        _buildAllResultsTab(),
-
-        // Songs Tab
-        _buildSongsTab(),
-
-        // Artists Tab
-        _buildArtistsTab(),
-
-        // Albums Tab
-        _buildAlbumsTab(),
-
-        // Playlists Tab
-        _buildPlaylistsTab(),
-      ],
-    );
+    // Show content based on selected chip
+    switch (_filters[_selectedFilterIndex]) {
+      case 'Songs':
+        return _buildSongsTab();
+      case 'Artists':
+        return _buildArtistsTab();
+      case 'Albums':
+        return _buildAlbumsTab();
+      case 'Playlists':
+        return _buildPlaylistsTab();
+      case 'All':
+      default:
+        return _buildAllResultsTab();
+    }
   }
 
   Widget _buildAllResultsTab() {

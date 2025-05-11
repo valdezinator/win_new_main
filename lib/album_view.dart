@@ -521,15 +521,6 @@ class _AlbumViewState extends State<AlbumView> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  widget.album['category'] ?? 'ALBUM', // Use category or default to ALBUM
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
                   widget.album['playlist_name'] ?? widget.album['title'] ?? 'Unknown Album',
                   style: const TextStyle(
                     color: Colors.white,

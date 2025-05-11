@@ -209,13 +209,25 @@ class DownloadService {
         await for (final entity in directory.list()) {
           if (entity is File && entity.path.contains('metadata')) {
             try {
-              final fileName = entity.path.split('\\').last;
+              // Use platform-specific path separator
+              final fileName = entity.path.split(Platform.pathSeparator).last;
               final originalName = fileName.replaceAll(RegExp(r'[a-f0-9]{64}'), '');
               if (originalName.contains('album_') && originalName.contains('_metadata')) {
                 final albumId = originalName.replaceAll('album_', '').replaceAll('_metadata', '');
                 final metadata = await getAlbumMetadata(albumId);
                 if (metadata != null) {
-                  albums.add(metadata);
+                  // Ensure the album has all required fields for display
+                  final formattedAlbum = {
+                    'id': metadata['album_id'],
+                    'title': metadata['title'] ?? 'Unknown Album',
+                    'artist': metadata['artist'] ?? 'Unknown Artist',
+                    'image_url': metadata['image_url'],
+                    'songs': metadata['songs'] ?? [],
+                    'downloaded': true,
+                    'category': 'album, downloaded',
+                    'downloaded_at': metadata['downloaded_at'],
+                  };
+                  albums.add(formattedAlbum);
                 }
               }
             } catch (e) {

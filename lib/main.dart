@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';  // Add this import
+import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import 'home_page.dart';
 import 'sign_in.dart';
 import 'main_app.dart';
@@ -13,6 +14,29 @@ import 'dart:convert';
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize window manager for Windows
+  if (Platform.isWindows) {
+    try {
+      await windowManager.ensureInitialized();
+
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(1280, 720),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.normal,
+      );
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (e) {
+      debugPrint('Error initializing window manager: $e');
+      // Continue with the app even if window manager fails
+    }
+  }
 
   // Configure platform channels to use platform thread
   SystemChannels.platform.setMethodCallHandler((call) async {
@@ -84,7 +108,7 @@ class MyApp extends StatelessWidget {
           if (state['isLoggedIn']) {
             return const MainApp();
           } else {
-            return LoginScreen();
+            return const LoginScreen();
           }
         },
       ),
@@ -93,8 +117,10 @@ class MyApp extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -124,15 +150,17 @@ class _LoginScreenState extends State<LoginScreen> {
         debugPrint("Auth state changed: ${data.event}");
         if (data.event == AuthChangeEvent.signedIn) {
           subscription?.cancel();
-          setState(() {
-            _isBusy = false;
-          });
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MainApp(),
-            ),
-          );
+          if (mounted) {
+            setState(() {
+              _isBusy = false;
+            });
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MainApp(),
+              ),
+            );
+          }
         }
       });
 
