@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../album_view.dart';
+import '../home_page.dart';
 import '../services/audio_service.dart';
 import 'package:supabase/supabase.dart';
 
@@ -70,6 +71,17 @@ class _ContentViewState extends State<ContentView> {
           currentlyPlayingSong: widget.currentlyPlayingSong,
           inMainLayout: true, // Flag to indicate it's in the main layout
           onBackPressed: widget.onBackPressed,
+        );
+      case ContentType.artist:
+        if (_contentData == null) {
+          return const Center(child: Text('No artist data', style: TextStyle(color: Colors.white)));
+        }
+        return Material(
+          color: Colors.transparent,
+          child: ArtistDetailsPage(
+            artist: _contentData!,
+            onBackPressed: widget.onBackPressed,
+          ),
         );
       default:
         return Container(); // This will be replaced by the TabBarView in HomeScreen
