@@ -125,150 +125,423 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Colors.black,
+        title: const Text('Settings',
+          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w300)  ),
+        backgroundColor: Colors.transparent,
       ),
-      backgroundColor: const Color(0xFF181A20),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      backgroundColor: Colors.transparent,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Determine if we have enough width for a multi-column layout
+          final bool isWideScreen = constraints.maxWidth > 900;
+
+          if (isWideScreen) {
+            // Desktop multi-column layout
+            return _buildDesktopLayout();
+          } else {
+            // Single column layout for narrower windows
+            return _buildMobileLayout();
+          }
+        },
+      ),
+    );
+  }
+
+  // Desktop layout with multiple columns
+  Widget _buildDesktopLayout() {
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ------------------- Account Section -------------------
-          _sectionHeader('Account'),
-          ListTile(
-            leading: const Icon(Icons.person, color: Colors.white70),
-            title: Text(_username ?? '', style: const TextStyle(color: Colors.white)),
-            subtitle: Text(_email ?? '', style: const TextStyle(color: Colors.white54)),
-            trailing: TextButton(
-              onPressed: _signOut,
-              child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
+          // Left column - Account and Playback
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionCard(
+                  'Account',
+                  [
+                    ListTile(
+                      leading: const Icon(Icons.person, color: Colors.white70, size: 28),
+                      title: Text(_username ?? '',
+                        style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: Text(_email ?? '',
+                        style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                      trailing: TextButton(
+                        onPressed: _signOut,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        ),
+                        child: const Text('Sign out',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSectionCard(
+                  'Playback',
+                  [
+                    SwitchListTile(
+                      value: _crossfade,
+                      onChanged: (v) { setState(() => _crossfade = v); _saveSetting('crossfade', v); },
+                      title: const Text('Crossfade',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Smoothly transition between songs',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                    SwitchListTile(
+                      value: _gapless,
+                      onChanged: (v) { setState(() => _gapless = v); _saveSetting('gapless', v); },
+                      title: const Text('Gapless Playback',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('No silence between tracks',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                    ListTile(
+                      title: const Text('Audio Quality',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: Text(_audioQuality.label,
+                        style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                      trailing: DropdownButton<AudioQuality>(
+                        value: _audioQuality,
+                        dropdownColor: Colors.grey[900],
+                        items: AudioQuality.values
+                            .map((q) => DropdownMenuItem(value: q, child: Text(q.label)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => _audioQuality = v);
+                            _saveSetting('audio_quality', v.label);
+                          }
+                        },
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: _wifiOnly,
+                      onChanged: (v) { setState(() => _wifiOnly = v); _saveSetting('wifi_only', v); },
+                      title: const Text('Download over Wi-Fi only',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Prevent mobile data usage',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const Divider(color: Colors.white24),
 
-          // ------------------- Playback Section -------------------
-          _sectionHeader('Playback'),
-          SwitchListTile(
-            value: _crossfade,
-            onChanged: (v) { setState(() => _crossfade = v); _saveSetting('crossfade', v); },
-            title: const Text('Crossfade', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Smoothly transition between songs'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _gapless,
-            onChanged: (v) { setState(() => _gapless = v); _saveSetting('gapless', v); },
-            title: const Text('Gapless Playback', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('No silence between tracks'),
-            activeColor: _accentColor,
-          ),          ListTile(
-            title: const Text('Audio Quality', style: TextStyle(color: Colors.white)),
-            subtitle: Text(_audioQuality.label, style: const TextStyle(color: Colors.white54)),
-            trailing: DropdownButton<AudioQuality>(
-              value: _audioQuality,
-              dropdownColor: Colors.grey[900],
-              items: AudioQuality.values
-                  .map((q) => DropdownMenuItem(value: q, child: Text(q.label)))
-                  .toList(),
-              onChanged: (v) { 
-                if (v != null) { 
-                  setState(() => _audioQuality = v); 
-                  _saveSetting('audio_quality', v.label); 
-                } 
-              },
+          const SizedBox(width: 24),
+
+          // Middle column - Notifications and Appearance
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionCard(
+                  'Notifications',
+                  [
+                    SwitchListTile(
+                      value: _notifyNewReleases,
+                      onChanged: (v) { setState(() => _notifyNewReleases = v); _saveSetting('notify_new_releases', v); },
+                      title: const Text('New Releases',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Get notified about new music',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                    SwitchListTile(
+                      value: _notifyPlaylistUpdates,
+                      onChanged: (v) { setState(() => _notifyPlaylistUpdates = v); _saveSetting('notify_playlist_updates', v); },
+                      title: const Text('Playlist Updates',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Updates to your playlists',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                    SwitchListTile(
+                      value: _notifyAppUpdates,
+                      onChanged: (v) { setState(() => _notifyAppUpdates = v); _saveSetting('notify_app_updates', v); },
+                      title: const Text('App Updates',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('Important news and updates',
+                        style: TextStyle(fontSize: 14)),
+                      activeColor: _accentColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSectionCard(
+                  'Appearance',
+                  [
+                    ListTile(
+                      title: const Text('Theme',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      trailing: DropdownButton<String>(
+                        value: _theme,
+                        dropdownColor: Colors.grey[900],
+                        items: ['System', 'Dark', 'Light']
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                            .toList(),
+                        onChanged: (v) { if (v != null) { setState(() => _theme = v); _saveSetting('theme', v); } },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Accent Color',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      trailing: GestureDetector(
+                        onTap: _pickAccentColor,
+                        child: CircleAvatar(backgroundColor: _accentColor, radius: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          SwitchListTile(
-            value: _wifiOnly,
-            onChanged: (v) { setState(() => _wifiOnly = v); _saveSetting('wifi_only', v); },
-            title: const Text('Download over Wi-Fi only', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Prevent mobile data usage'),
-            activeColor: _accentColor,
-          ),
-          const Divider(color: Colors.white24),
 
-          // ------------------- Notification Section -------------------
-          _sectionHeader('Notifications'),
-          SwitchListTile(
-            value: _notifyNewReleases,
-            onChanged: (v) { setState(() => _notifyNewReleases = v); _saveSetting('notify_new_releases', v); },
-            title: const Text('New Releases', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Get notified about new music'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _notifyPlaylistUpdates,
-            onChanged: (v) { setState(() => _notifyPlaylistUpdates = v); _saveSetting('notify_playlist_updates', v); },
-            title: const Text('Playlist Updates', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Updates to your playlists'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _notifyAppUpdates,
-            onChanged: (v) { setState(() => _notifyAppUpdates = v); _saveSetting('notify_app_updates', v); },
-            title: const Text('App Updates', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Important news and updates'),
-            activeColor: _accentColor,
-          ),
-          const Divider(color: Colors.white24),
+          const SizedBox(width: 24),
 
-          // ------------------- Appearance Section -------------------
-          _sectionHeader('Appearance'),
-          ListTile(
-            title: const Text('Theme', style: TextStyle(color: Colors.white)),
-            trailing: DropdownButton<String>(
-              value: _theme,
-              dropdownColor: Colors.grey[900],
-              items: ['System', 'Dark', 'Light']
-                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                  .toList(),
-              onChanged: (v) { if (v != null) { setState(() => _theme = v); _saveSetting('theme', v); } },
+          // Right column - Privacy and About
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionCard(
+                  'Privacy',
+                  [
+                    ListTile(
+                      title: const Text('Clear Cache',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      trailing: _clearingCache
+                          ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))
+                          : IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.redAccent, size: 24),
+                              onPressed: _clearCache,
+                            ),
+                    ),
+                    ListTile(
+                      title: const Text('Manage Data',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: const Text('View or delete your data',
+                        style: TextStyle(fontSize: 14)),
+                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+                      onTap: () {
+                        // TODO: Implement data management
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Data management coming soon!')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSectionCard(
+                  'About',
+                  [
+                    ListTile(
+                      title: const Text('App Version',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      subtitle: Text(_appVersion,
+                        style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                    ),
+                    ListTile(
+                      title: const Text('Licenses',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+                      onTap: () => showLicensePage(context: context),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-          ListTile(
-            title: const Text('Accent Color', style: TextStyle(color: Colors.white)),
-            trailing: GestureDetector(
-              onTap: _pickAccentColor,
-              child: CircleAvatar(backgroundColor: _accentColor, radius: 14),
-            ),
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- Privacy Section -------------------
-          _sectionHeader('Privacy'),
-          ListTile(
-            title: const Text('Clear Cache', style: TextStyle(color: Colors.white)),
-            trailing: _clearingCache
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                : IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: _clearCache,
-                  ),
-          ),
-          ListTile(
-            title: const Text('Manage Data', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('View or delete your data'),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
-            onTap: () {
-              // TODO: Implement data management
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Data management coming soon!')),
-              );
-            },
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- About Section -------------------
-          _sectionHeader('About'),
-          ListTile(
-            title: const Text('App Version', style: TextStyle(color: Colors.white)),
-            subtitle: Text(_appVersion, style: const TextStyle(color: Colors.white54)),
-          ),
-          ListTile(
-            title: const Text('Licenses', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
-            onTap: () => showLicensePage(context: context),
           ),
         ],
+      ),
+    );
+  }
+
+  // Mobile layout with single column
+  Widget _buildMobileLayout() {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // ------------------- Account Section -------------------
+        _sectionHeader('Account'),
+        ListTile(
+          leading: const Icon(Icons.person, color: Colors.white70),
+          title: Text(_username ?? '', style: const TextStyle(color: Colors.white)),
+          subtitle: Text(_email ?? '', style: const TextStyle(color: Colors.white54)),
+          trailing: TextButton(
+            onPressed: _signOut,
+            child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ),
+        const Divider(color: Colors.white24),
+
+        // ------------------- Playback Section -------------------
+        _sectionHeader('Playback'),
+        SwitchListTile(
+          value: _crossfade,
+          onChanged: (v) { setState(() => _crossfade = v); _saveSetting('crossfade', v); },
+          title: const Text('Crossfade', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Smoothly transition between songs'),
+          activeColor: _accentColor,
+        ),
+        SwitchListTile(
+          value: _gapless,
+          onChanged: (v) { setState(() => _gapless = v); _saveSetting('gapless', v); },
+          title: const Text('Gapless Playback', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('No silence between tracks'),
+          activeColor: _accentColor,
+        ),
+        ListTile(
+          title: const Text('Audio Quality', style: TextStyle(color: Colors.white)),
+          subtitle: Text(_audioQuality.label, style: const TextStyle(color: Colors.white54)),
+          trailing: DropdownButton<AudioQuality>(
+            value: _audioQuality,
+            dropdownColor: Colors.grey[900],
+            items: AudioQuality.values
+                .map((q) => DropdownMenuItem(value: q, child: Text(q.label)))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) {
+                setState(() => _audioQuality = v);
+                _saveSetting('audio_quality', v.label);
+              }
+            },
+          ),
+        ),
+        SwitchListTile(
+          value: _wifiOnly,
+          onChanged: (v) { setState(() => _wifiOnly = v); _saveSetting('wifi_only', v); },
+          title: const Text('Download over Wi-Fi only', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Prevent mobile data usage'),
+          activeColor: _accentColor,
+        ),
+        const Divider(color: Colors.white24),
+
+        // ------------------- Notification Section -------------------
+        _sectionHeader('Notifications'),
+        SwitchListTile(
+          value: _notifyNewReleases,
+          onChanged: (v) { setState(() => _notifyNewReleases = v); _saveSetting('notify_new_releases', v); },
+          title: const Text('New Releases', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Get notified about new music'),
+          activeColor: _accentColor,
+        ),
+        SwitchListTile(
+          value: _notifyPlaylistUpdates,
+          onChanged: (v) { setState(() => _notifyPlaylistUpdates = v); _saveSetting('notify_playlist_updates', v); },
+          title: const Text('Playlist Updates', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Updates to your playlists'),
+          activeColor: _accentColor,
+        ),
+        SwitchListTile(
+          value: _notifyAppUpdates,
+          onChanged: (v) { setState(() => _notifyAppUpdates = v); _saveSetting('notify_app_updates', v); },
+          title: const Text('App Updates', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Important news and updates'),
+          activeColor: _accentColor,
+        ),
+        const Divider(color: Colors.white24),
+
+        // ------------------- Appearance Section -------------------
+        _sectionHeader('Appearance'),
+        ListTile(
+          title: const Text('Theme', style: TextStyle(color: Colors.white)),
+          trailing: DropdownButton<String>(
+            value: _theme,
+            dropdownColor: Colors.grey[900],
+            items: ['System', 'Dark', 'Light']
+                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                .toList(),
+            onChanged: (v) { if (v != null) { setState(() => _theme = v); _saveSetting('theme', v); } },
+          ),
+        ),
+        ListTile(
+          title: const Text('Accent Color', style: TextStyle(color: Colors.white)),
+          trailing: GestureDetector(
+            onTap: _pickAccentColor,
+            child: CircleAvatar(backgroundColor: _accentColor, radius: 14),
+          ),
+        ),
+        const Divider(color: Colors.white24),
+
+        // ------------------- Privacy Section -------------------
+        _sectionHeader('Privacy'),
+        ListTile(
+          title: const Text('Clear Cache', style: TextStyle(color: Colors.white)),
+          trailing: _clearingCache
+              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+              : IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  onPressed: _clearCache,
+                ),
+        ),
+        ListTile(
+          title: const Text('Manage Data', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('View or delete your data'),
+          trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+          onTap: () {
+            // TODO: Implement data management
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Data management coming soon!')),
+            );
+          },
+        ),
+        const Divider(color: Colors.white24),
+
+        // ------------------- About Section -------------------
+        _sectionHeader('About'),
+        ListTile(
+          title: const Text('App Version', style: TextStyle(color: Colors.white)),
+          subtitle: Text(_appVersion, style: const TextStyle(color: Colors.white54)),
+        ),
+        ListTile(
+          title: const Text('Licenses', style: TextStyle(color: Colors.white)),
+          trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+          onTap: () => showLicensePage(context: context),
+        ),
+      ],
+    );
+  }
+
+  // Helper for creating section cards in desktop layout
+  Widget _buildSectionCard(String title, List<Widget> children) {
+    return Card(
+      color: Colors.black.withOpacity(0.3),
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 16.0),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ...children,
+          ],
+        ),
       ),
     );
   }
