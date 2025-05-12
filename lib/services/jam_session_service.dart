@@ -11,7 +11,7 @@ class JamSessionService {
   JamSessionService._internal();
 
   final _supabase = Supabase.instance.client;
-  final _uuid = Uuid();
+  final _uuid = const Uuid();
 
   // Stream controllers to broadcast changes to any listeners
   final _sessionController = StreamController<Map<String, dynamic>?>.broadcast();

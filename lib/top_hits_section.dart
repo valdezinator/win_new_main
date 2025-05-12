@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 class TopHitsSection extends StatelessWidget {
   final List<Map<String, String>> topHits;
 
-  const TopHitsSection({Key? key, required this.topHits}) : super(key: key);
+  const TopHitsSection({super.key, required this.topHits});
 
   @override
   Widget build(BuildContext context) {

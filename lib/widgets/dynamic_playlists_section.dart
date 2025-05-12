@@ -8,9 +8,9 @@ class DynamicPlaylistsSection extends StatefulWidget {
   final Function(Map<String, dynamic>) onPlaylistSelected;
 
   const DynamicPlaylistsSection({
-    Key? key,
+    super.key,
     required this.onPlaylistSelected,
-  }) : super(key: key);
+  });
 
   @override
   State<DynamicPlaylistsSection> createState() => _DynamicPlaylistsSectionState();

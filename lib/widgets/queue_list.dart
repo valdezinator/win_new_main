@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/jam_session_service.dart';
 import 'jam_session_controls.dart';
 import 'join_session_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class QueueList extends StatefulWidget {
   final Map<String, dynamic> currentSong;
@@ -13,12 +12,12 @@ class QueueList extends StatefulWidget {
   final String userName; // Added for jam session host name
 
   const QueueList({
-    Key? key,
+    super.key,
     required this.currentSong,
     required this.onClose,
     this.onSongSelected,
     this.userName = 'User', // Default value if not provided
-  }) : super(key: key);
+  });
 
   @override
   _QueueListState createState() => _QueueListState();
@@ -315,7 +314,7 @@ class _QueueListState extends State<QueueList> {
         ),
         // Use a slightly transparent background to blend with the app theme
         // Consider using Theme.of(context).cardColor or a custom color
-        color: Colors.grey[850]!.withOpacity(0.95), // Changed to a specific dark color
+        color: Colors.black!.withOpacity(0.95), // Changed to a specific dark color
         clipBehavior: Clip.antiAlias, // Ensures content respects rounded corners
         child: SizedBox( // Constrain the width of the QueueList
           width: 350, // Adjust width as desired
@@ -335,7 +334,7 @@ class _QueueListState extends State<QueueList> {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.close, color: Colors.white70), // Changed to white70 for slight dimming
+                      icon: const Icon(Icons.close, color: Colors.white70), // Changed to white70 for slight dimming
                       onPressed: widget.onClose,
                       splashRadius: 20,
                     ),

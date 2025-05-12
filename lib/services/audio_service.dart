@@ -122,6 +122,7 @@ class AudioService {
         'artist': songData['artist'],
         'image_url': songData['image_url'],
         'duration': songData['duration'],
+        'song_lyrics': songData['song_lyrics'], // Include lyrics from songs_2 table
         'queue': song['queue'], // Keep the queue from the original song object
         'downloaded': song['downloaded'] ?? false, // Keep downloaded flag
         'filename': song['filename'], // Keep filename for downloaded songs
@@ -282,6 +283,7 @@ class AudioService {
           'album_art': nextSongMap['album_art'] ?? nextSongMap['image_url'] ?? _currentSong?['album_art'],
           'artist': nextSongMap['artist'] ?? _currentSong?['artist'] ?? 'Unknown Artist',
           'duration': nextSongMap['duration'],
+          'song_lyrics': nextSongMap['song_lyrics'], // Preserve lyrics data
         };
 
         await playSong(songToPlay);
@@ -324,6 +326,7 @@ class AudioService {
       final prevSongMap = _queue[_currentIndex];
       Map<String, dynamic> songToPlay = Map<String, dynamic>.from(prevSongMap);
       songToPlay['queue'] = _queue; // Pass the current full queue
+      songToPlay['song_lyrics'] = prevSongMap['song_lyrics']; // Preserve lyrics data
       await playSong(songToPlay);
     } else {
       // At the beginning of the queue, replay the first song from the beginning
@@ -332,6 +335,7 @@ class AudioService {
         final firstSongMap = _queue[0];
         Map<String, dynamic> songToPlay = Map<String, dynamic>.from(firstSongMap);
         songToPlay['queue'] = _queue;
+        songToPlay['song_lyrics'] = firstSongMap['song_lyrics']; // Preserve lyrics data
         await playSong(songToPlay);
         await player.seek(Duration.zero);
       }

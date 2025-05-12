@@ -33,7 +33,7 @@ class HomeScreen extends StatefulWidget {
   });
 
   @override
-    State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration')
+          .select('id, title, artist, audio_url, image_url, duration, song_lyrics')
           .order('created_at');
 
       if (response.isEmpty) {
@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration, play_count')
+          .select('id, title, artist, audio_url, image_url, duration, play_count, song_lyrics')
           .order('play_count', ascending: false)
           .limit(10);
       final trendingList = List<Map<String, dynamic>>.from(response);
@@ -441,6 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         'image_url': song['image_url'] ?? '', // Ensure image_url exists
         'artist': song['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
+        'song_lyrics': song['song_lyrics'], // Include lyrics data
       };
 
       // Play the song - this will update the UI through the stream listener
@@ -1422,17 +1423,32 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
 
   Future<List<Map<String, dynamic>>> _fetchArtistTopTracks() async {
     try {
-      // In a real app, you would fetch the artist's top tracks
-      // For now, we'll return a placeholder list
-      return List.generate(5, (index) => {
-        'id': 'track_$index',
-        'title': 'Popular Track ${index + 1}',
-        'artist': widget.artist['name'] ?? 'Unknown Artist',
-        'duration': '3:${index + 10}',
-        'plays': '${(5 - index) * 1000000}',
-        'image_url': widget.artist['image_url'],
-      });
+      // Fetch songs for this artist where isTop is TRUE
+      final response = await supabaseClient
+          .from('songs_2')
+          .select('id, title, artist, duration, audio_url, image_url, play_count, song_lyrics')
+          .eq('artist', widget.artist['name'])
+          .eq('isTop', true)
+          .order('play_count', ascending: false)
+          .limit(5);
+
+      final tracks = List<Map<String, dynamic>>.from(response);
+
+      // If no top tracks found, get any tracks from this artist
+      if (tracks.isEmpty) {
+        final fallbackResponse = await supabaseClient
+            .from('songs_2')
+            .select('id, title, artist, duration, audio_url, image_url, play_count, song_lyrics')
+            .eq('artist', widget.artist['name'])
+            .order('play_count', ascending: false)
+            .limit(5);
+
+        return List<Map<String, dynamic>>.from(fallbackResponse);
+      }
+
+      return tracks;
     } catch (e) {
+      print('Error fetching artist top tracks: $e');
       return [];
     }
   }
@@ -1472,6 +1488,37 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
       _isFollowing = !_isFollowing;
     });
     // In a real app, you would update the database
+  }
+
+  // Method to fetch the artist's biography from Supabase
+  Future<String> _fetchArtistBio() async {
+    try {
+      // Get the artist name from the widget
+      final artistName = widget.artist['name'];
+
+      if (artistName == null) {
+        return 'No biography available for this artist.';
+      }
+
+      // Query the artist_page table for the artist_details column
+      final response = await supabaseClient
+          .from('artist_page')
+          .select('artist_details')
+          .eq('artist_name', artistName)
+          .single();
+
+      // Extract the bio from the response
+      final bio = response['artist_details'] as String?;
+
+      if (bio == null || bio.isEmpty) {
+        return 'No biography available for this artist.';
+      }
+
+      return bio;
+    } catch (e) {
+      print('Error fetching artist bio: $e');
+      return 'Unable to load artist biography at this time.';
+    }
   }
 
   @override
@@ -1800,7 +1847,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 5),
 
                   // Albums grid
                   FutureBuilder<List<Map<String, dynamic>>>(
@@ -1908,14 +1955,31 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                   const SizedBox(height: 24),
 
                   // Artist bio
-                  Text(
-                    'Artist biography and information would go here. This section would include details about the artist\'s career, achievements, and background.',
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 16,
-                      height: 1.5,
+                    FutureBuilder<String>(
+                    future: _fetchArtistBio(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2)
+                        ),
+                      );
+                      }
+
+                      final bio = snapshot.data ?? 'No biography available for this artist.';
+
+                      return Text(
+                      bio,
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 16,
+                        height: 1.5,
+                      ),
+                      );
+                    },
                     ),
-                  ),
 
                   // Monthly listeners with icon
                   const SizedBox(height: 24),

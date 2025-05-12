@@ -4,8 +4,6 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
-import 'home_page.dart';
-import 'sign_in.dart';
 import 'main_app.dart';
 import 'dart:io';
 import 'dart:async';

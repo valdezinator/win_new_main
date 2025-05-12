@@ -11,13 +11,13 @@ class JamSessionControls extends StatefulWidget {
   final Function() onEnd;
 
   const JamSessionControls({
-    Key? key,
+    super.key,
     required this.sessionId,
     required this.sessionName,
     required this.hostName,
     required this.isHost,
     required this.onEnd,
-  }) : super(key: key);
+  });
 
   @override
   _JamSessionControlsState createState() => _JamSessionControlsState();

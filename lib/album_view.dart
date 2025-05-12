@@ -221,7 +221,8 @@ class _AlbumViewState extends State<AlbumView> {
                   artist,
                   audio_url,
                   image_url,
-                  duration
+                  duration,
+                  song_lyrics
                 ),
                 dynamic_playlists!inner (
                   id,
@@ -242,7 +243,8 @@ class _AlbumViewState extends State<AlbumView> {
                       artist,
                       audio_url,
                       image_url,
-                      duration
+                      duration,
+                      song_lyrics
                     )
                   ''')
                   .eq('playlist_id', widget.album['id'])
@@ -384,6 +386,7 @@ class _AlbumViewState extends State<AlbumView> {
           'album': widget.album['playlist_name'] ?? widget.album['title'],
           'album_id': widget.album['id'],
           'duration': duration,
+          'song_lyrics': songData['song_lyrics'], // Include lyrics data
           'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
           'filename': _isDownloaded ? 'song_${songData['id']}' : null, // Add filename for downloaded songs
         };
@@ -407,6 +410,7 @@ class _AlbumViewState extends State<AlbumView> {
         'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
         'duration': songDuration,
+        'song_lyrics': song['song_lyrics'], // Include lyrics data
         'queue': formattedQueue, // Use the formatted queue
         'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
         'filename': _isDownloaded ? 'song_${song['id']}' : null, // Add filename for downloaded songs

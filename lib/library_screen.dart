@@ -612,13 +612,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildGridView(List<Map<String, dynamic>> playlists) {
+    // Calculate responsive grid based on screen width
+    final screenWidth = MediaQuery.of(context).size.width;
+    int crossAxisCount = 2; // Default for very small screens
+
+    // Responsive grid sizing
+    if (screenWidth > 600) crossAxisCount = 3;
+    if (screenWidth > 900) crossAxisCount = 4;
+    if (screenWidth > 1200) crossAxisCount = 5;
+    if (screenWidth > 1500) crossAxisCount = 6;
+
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+      padding: const EdgeInsets.all(20),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: 0.85, // Slightly taller than wide for title space
+        crossAxisSpacing: 20,
+        mainAxisSpacing: 20,
       ),
       itemCount: playlists.length,
       itemBuilder: (context, index) {
@@ -640,127 +650,390 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildPlaylistCard(Map<String, dynamic> playlist) {
-    return GestureDetector(
-      onSecondaryTapDown: (details) {
-        // Use globalPosition to get the correct position relative to the screen
-        _showContextMenu(context, playlist, details.globalPosition);
-      }, // Show context menu on right-click
-      child: InkWell(
-        onTap: () {
-          if (widget.onAlbumSelected != null) {
-            // Use the callback to navigate to the album view
-            widget.onAlbumSelected!(playlist);
-          } else {
-            // Fallback to the old navigation method
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AlbumView(
-                  album: playlist,
-                  supabaseClient: widget.supabaseClient,
-                  onSongSelected: (song) {
-                    // ...handle song selection...
-                    //print("Song selected: $song");
-                  },
-                  currentlyPlayingSong: widget.currentlyPlayingSong,
+    final bool isCurrentlyPlaying = widget.currentlyPlayingSong != null &&
+        widget.currentlyPlayingSong!['album_id'] == playlist['id'];
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          // Use globalPosition to get the correct position relative to the screen
+          _showContextMenu(context, playlist, details.globalPosition);
+        }, // Show context menu on right-click
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            bool isHovered = false;
+
+            return MouseRegion(
+              onEnter: (_) => setState(() => isHovered = true),
+              onExit: (_) => setState(() => isHovered = false),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isHovered
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isHovered
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ]
+                      : null,
                 ),
-              ),
-            );
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                    image: DecorationImage(
-                      image: NetworkImage(playlist['image_url'] ?? ''),
-                      fit: BoxFit.cover,
-                      onError: (_, __) {},
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      if (widget.onAlbumSelected != null) {
+                        // Use the callback to navigate to the album view
+                        widget.onAlbumSelected!(playlist);
+                      } else {
+                        // Fallback to the old navigation method
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AlbumView(
+                              album: playlist,
+                              supabaseClient: widget.supabaseClient,
+                              onSongSelected: (song) {
+                                // ...handle song selection...
+                                //print("Song selected: $song");
+                              },
+                              currentlyPlayingSong: widget.currentlyPlayingSong,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // Cover image
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                child: Image.network(
+                                  playlist['image_url'] ?? '',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: Colors.grey[800],
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      color: Colors.white54,
+                                      size: 40,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Play overlay on hover
+                              if (isHovered)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.5),
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.play_arrow,
+                                          color: Colors.black,
+                                          size: 28,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                              // Currently playing indicator
+                              if (isCurrentlyPlaying)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.volume_up,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Playing',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                playlist['playlist_name'] ?? 'Unnamed Playlist',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                playlist['description'] ?? 'Your playlist',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  playlist['playlist_name'] ?? 'Unnamed Playlist',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+            );
+          }
         ),
       ),
     );
   }
 
   Widget _buildPlaylistListItem(Map<String, dynamic> playlist) {
-    return GestureDetector(
-      onSecondaryTapDown: (details) {
-        // Use globalPosition to get the correct position relative to the screen
-        _showContextMenu(context, playlist, details.globalPosition);
-      }, // Show context menu on right-click
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AlbumView(
-                album: playlist,
-                supabaseClient: widget.supabaseClient,
-                onSongSelected: (song) {
-                  // ...handle song selection...
-                  //print("Song selected: $song");
-                },
-                currentlyPlayingSong: widget.currentlyPlayingSong,
-              ),
-            ),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(8),
-            leading: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                image: DecorationImage(
-                  image: NetworkImage(playlist['image_url'] ?? ''),
-                  fit: BoxFit.cover,
-                  onError: (_, __) {},
+    final bool isCurrentlyPlaying = widget.currentlyPlayingSong != null &&
+        widget.currentlyPlayingSong!['album_id'] == playlist['id'];
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          // Use globalPosition to get the correct position relative to the screen
+          _showContextMenu(context, playlist, details.globalPosition);
+        }, // Show context menu on right-click
+        child: StatefulBuilder(
+          builder: (context, setStateLocal) {
+            bool isHovered = false;
+
+            return MouseRegion(
+              onEnter: (_) => setStateLocal(() => isHovered = true),
+              onExit: (_) => setStateLocal(() => isHovered = false),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: isHovered
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isHovered
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : null,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      if (widget.onAlbumSelected != null) {
+                        // Use the callback to navigate to the album view
+                        widget.onAlbumSelected!(playlist);
+                      } else {
+                        // Fallback to the old navigation method
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AlbumView(
+                              album: playlist,
+                              supabaseClient: widget.supabaseClient,
+                              onSongSelected: (song) {
+                                // ...handle song selection...
+                                //print("Song selected: $song");
+                              },
+                              currentlyPlayingSong: widget.currentlyPlayingSong,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      child: Row(
+                        children: [
+                          // Cover image with play overlay on hover
+                          Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 60,
+                                  height: 60,
+                                  child: Image.network(
+                                    playlist['image_url'] ?? '',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                        size: 30,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Play overlay on hover
+                              if (isHovered)
+                                Positioned.fill(
+                                  child: Container(
+                                    width: 60,
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.play_arrow,
+                                          color: Colors.black,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+
+                          const SizedBox(width: 16),
+
+                          // Playlist info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  playlist['playlist_name'] ?? 'Unnamed Playlist',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  playlist['description'] ?? 'Your playlist',
+                                  style: TextStyle(
+                                    color: Colors.grey[400],
+                                    fontSize: 13,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Currently playing indicator
+                          if (isCurrentlyPlaying)
+                            Container(
+                              margin: const EdgeInsets.only(right: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.volume_up,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Playing',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          // More options icon
+                          Icon(
+                            Icons.more_vert,
+                            color: Colors.grey[400],
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-            title: Text(
-              playlist['playlist_name'] ?? 'Unnamed Playlist',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            trailing: const Icon(Icons.more_vert, color: Colors.white),
-          ),
+            );
+          }
         ),
       ),
     );
@@ -774,32 +1047,130 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             // Header with view toggle and create button
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withOpacity(0.05),
+                    width: 1,
+                  ),
+                ),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Your Playlists',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  // Title with icon
                   Row(
                     children: [
-                      IconButton(
-                        icon: Icon(
-                          _isGridView ? Icons.view_list : Icons.grid_view,
-                          color: Colors.white,
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isGridView = !_isGridView;
-                          });
-                        },
+                        child: const Icon(
+                          Icons.library_music,
+                          color: Colors.purple,
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 16),
+                      const Text(
+                        'Your Playlists',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Action buttons
+                  Row(
+                    children: [
+                      // View toggle button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
+                              setState(() {
+                                _isGridView = !_isGridView;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _isGridView ? Icons.view_list : Icons.grid_view,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _isGridView ? 'List View' : 'Grid View',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // AI Playlist button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: _createAIPlaylist,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome,
+                                    color: Colors.deepPurple,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'AI Playlist',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Create playlist button
                       ElevatedButton.icon(
                         onPressed: _showCreatePlaylistDialog,
                         icon: const Icon(Icons.add),
@@ -807,6 +1178,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],
@@ -854,7 +1229,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           const SizedBox(height: 24),
                           ElevatedButton(
                             onPressed: _showCreatePlaylistDialog,
-                            child: Text('Create Your First Playlist'),
+                            child: const Text('Create Your First Playlist'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.black,
@@ -896,7 +1271,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        const Text(
                           'Options',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),

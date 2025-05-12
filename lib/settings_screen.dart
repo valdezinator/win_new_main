@@ -7,7 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// Sections: Account, Playback, Notifications, Appearance, Privacy, About
 class SettingsScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
-  const SettingsScreen({Key? key, required this.supabaseClient}) : super(key: key);
+  const SettingsScreen({super.key, required this.supabaseClient});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -226,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('Manage Data', style: TextStyle(color: Colors.white)),
             subtitle: const Text('View or delete your data'),
-            trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
             onTap: () {
               // TODO: Implement data management
               ScaffoldMessenger.of(context).showSnackBar(
@@ -244,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('Licenses', style: TextStyle(color: Colors.white)),
-            trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
             onTap: () => showLicensePage(context: context),
           ),
         ],

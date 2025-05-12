@@ -371,7 +371,7 @@ class PlaylistGeneratorService {
 class PlaylistGeneratorScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
 
-  const PlaylistGeneratorScreen({Key? key, required this.supabaseClient}) : super(key: key);
+  const PlaylistGeneratorScreen({super.key, required this.supabaseClient});
 
   @override
   _PlaylistGeneratorScreenState createState() => _PlaylistGeneratorScreenState();

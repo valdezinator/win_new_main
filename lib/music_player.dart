@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'package:palette_generator/palette_generator.dart';
@@ -10,6 +9,7 @@ import 'dart:async';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'widgets/jam_session_indicator.dart';
+import 'widgets/lyrics_panel.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -237,6 +237,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     if (isRepeatEnabled) {
       // Replay the current song
       final songToReplay = Map<String, dynamic>.from(widget.song);
+      // Ensure lyrics data is preserved
+      songToReplay['song_lyrics'] = widget.song['song_lyrics'];
       _audioService.playSong(songToReplay);
     } else if (isShuffleEnabled) {
       // Play a random song from the queue
@@ -249,6 +251,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       if (currentQueue.length == 1 && currentIndex != -1) {
         // Only one song in queue, replay if shuffle is on
         final songToReplay = Map<String, dynamic>.from(widget.song);
+        // Ensure lyrics data is preserved
+        songToReplay['song_lyrics'] = widget.song['song_lyrics'];
         _audioService.playSong(songToReplay);
         return;
       }
@@ -263,6 +267,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       final Map<String, dynamic> songToPlay = {
         ...nextRandomSongDetails,
         'queue': currentQueue, // Pass the full original queue
+        'song_lyrics': nextRandomSongDetails['song_lyrics'], // Preserve lyrics data
       };
       _audioService.playSong(songToPlay);
     } else {
@@ -494,42 +499,51 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
                           // Progress bar
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center, // Center the entire row
                             children: [
-                              // Current position
-                              Text(
-                                _formatDuration(currentPosition),
-                                style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 14),
-                              ),
+                              Flexible(
+                                child: Container(
+                                  constraints: const BoxConstraints(maxWidth: 400), // Constrain maximum width
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Current position
+                                      Text(
+                                        _formatDuration(currentPosition),
+                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                      ),
+                                      const SizedBox(width: 8),
 
-                              const SizedBox(width: 20),
+                                      // Progress slider
+                                      Expanded(
+                                        child: SliderTheme(
+                                          data: SliderThemeData(
+                                            trackHeight: 2,
+                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                                            activeTrackColor: accentColor,
+                                            inactiveTrackColor: Colors.grey[800],
+                                            thumbColor: accentColor,
+                                          ),
+                                          child: Slider(
+                                            value: currentPosition.inSeconds.toDouble(),
+                                            max: totalDuration.inSeconds.toDouble(),
+                                            onChanged: (value) {
+                                              _audioService.player.seek(Duration(seconds: value.toInt()));
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
 
-                              // Progress slider
-                              Expanded(
-                                child: SliderTheme(
-                                  data: SliderThemeData(
-                                    trackHeight: 4,
-                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                                    activeTrackColor: accentColor,
-                                    inactiveTrackColor: Colors.grey[800],
-                                    thumbColor: accentColor,
-                                  ),
-                                  child: Slider(
-                                    value: currentPosition.inSeconds.toDouble(),
-                                    max: totalDuration.inSeconds.toDouble(),
-                                    onChanged: (value) {
-                                      _audioService.player.seek(Duration(seconds: value.toInt()));
-                                    },
+                                      // Total duration
+                                      Text(
+                                        _formatDuration(totalDuration),
+                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-
-                              const SizedBox(width: 20),
-
-                              // Total duration
-                              Text(
-                                _formatDuration(totalDuration),
-                                style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 14),
                               ),
                             ],
                           ),
@@ -642,96 +656,30 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     return "$minutes:${seconds.toString().padLeft(2, '0')}";
   }
 
-  // NEW: Build lyrics overlay with glassmorphism and synced highlighting
-  Widget _buildLyricsOverlay() {
-    if (widget.song['song_lyrics'] == null || widget.song['song_lyrics'].isEmpty) {
-      return Positioned.fill(
-        child: Center(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: const Text(
-              "No lyrics found",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ),
-      );
-    }
-    final lyricsText = widget.song['song_lyrics'];
-    final words = lyricsText.split(' ');
-    final totalWords = words.length;
-    int highlightedIndex = 0;
-    if (totalDuration.inMilliseconds > 0) {
-      final progress = currentPosition.inMilliseconds / totalDuration.inMilliseconds;
-      highlightedIndex = (progress * totalWords).clamp(0, totalWords - 1).toInt();
-    }
-    List<TextSpan> spans = [];
-    for (var i = 0; i < totalWords; i++) {
-      spans.add(TextSpan(
-        text: words[i] + " ",
-        style: TextStyle(
-          color: i == highlightedIndex ? Colors.greenAccent : Colors.white,
-          fontWeight: i == highlightedIndex ? FontWeight.bold : FontWeight.normal,
-        ),
-      ));
-    }
-    return Positioned.fill(
-      child: GestureDetector(
-        // Tap outside the lyrics box to dismiss the overlay
-        onTap: () => setState(() => showLyrics = false),
-        child: Container(
-          alignment: Alignment.center,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
-              ),
-              child: SingleChildScrollView(
-                child: RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(children: spans),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-
-
   @override
   Widget build(BuildContext context) {
-    // Wrap with a KeyboardListener to handle ESC key for exiting full screen
     return KeyboardListener(
       focusNode: _fullScreenFocusNode,
       onKeyEvent: (KeyEvent event) {
-        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape && isFullScreen) {
-          _toggleFullScreen();
+        // Only handle KeyDownEvent to avoid duplicate events
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.escape && isFullScreen) {
+            _toggleFullScreen();
+          }
         }
+        // Always mark the event as handled to prevent it from propagating
+        return;
       },
       child: Stack(
         children: [
-          // Regular music player bar
+          // Base player UI
           Focus(
             focusNode: _focusNode,
             autofocus: false,
             onKeyEvent: (node, event) {
-              // Handle repeated key events
-              if (event is KeyRepeatEvent) {
+              // Only handle KeyDownEvent to avoid duplicate events
+              if (event is KeyDownEvent) {
+                // Add your key handling logic here
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
@@ -742,18 +690,12 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                 height: 80,
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 decoration: BoxDecoration(
-                  // Use a gradient with the dominant color
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      dominantColor.withOpacity(1),
-                      dominantColor.withOpacity(1),
-                      Colors.black,
-                    ],
-                    stops: const [0.0, 0.4, 1.0],
-                  ),
+                    color: const Color(0xFF080A0D),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 1,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.3),
@@ -803,7 +745,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 // Song title
                                 SizedBox(
                                   height: 20,
-                                  width: 140,
+                                  width: 140, // Reduced from 200 to match layout
                                   child: LayoutBuilder(
                                     builder: (context, constraints) {
                                       final text = widget.song['title'] ?? 'Unknown';
@@ -857,7 +799,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 // Artist name
                                 SizedBox(
                                   height: 16,
-                                  width: 140,
+                                  width: 140, // Reduced from 200 to match layout
                                   child: LayoutBuilder(
                                     builder: (context, constraints) {
                                       final text = widget.song['artist'] ?? 'Unknown Artist';
@@ -918,48 +860,59 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                         children: [
                           // Progress bar with duration on either side
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center, // Center the entire row
                             children: [
-                              // Current position
-                              Text(
-                                _formatDuration(currentPosition),
-                                style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
-                              ),
-                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Container(
+                                  constraints: const BoxConstraints(maxWidth: 400), // Constrain maximum width
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Current position
+                                      Text(
+                                        _formatDuration(currentPosition),
+                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                      ),
+                                      const SizedBox(width: 8),
 
-                              // Progress slider
-                              Expanded(
-                                child: SliderTheme(
-                                  data: SliderThemeData(
-                                    trackHeight: 2,
-                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                                    activeTrackColor: accentColor,
-                                    inactiveTrackColor: Colors.grey[800],
-                                    thumbColor: accentColor,
-                                  ),
-                                  child: Slider(
-                                    value: currentPosition.inSeconds.toDouble(),
-                                    max: totalDuration.inSeconds.toDouble(),
-                                    onChanged: (value) {
-                                      _audioService.player.seek(Duration(seconds: value.toInt()));
+                                      // Progress slider
+                                      Expanded(
+                                        child: SliderTheme(
+                                          data: SliderThemeData(
+                                            trackHeight: 2,
+                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                                            activeTrackColor: accentColor,
+                                            inactiveTrackColor: Colors.grey[800],
+                                            thumbColor: accentColor,
+                                          ),
+                                          child: Slider(
+                                            value: currentPosition.inSeconds.toDouble(),
+                                            max: totalDuration.inSeconds.toDouble(),
+                                            onChanged: (value) {
+                                              _audioService.player.seek(Duration(seconds: value.toInt()));
 
-                                      // Update jam session if host
-                                      if (_isInJamSession && _jamSessionService.isHost) {
-                                        // Use a small delay to ensure seeking is complete
-                                        Future.delayed(const Duration(milliseconds: 100), () {
-                                          _updateJamSessionPlayback();
-                                        });
-                                      }
-                                    },
+                                              // Update jam session if host
+                                              if (_isInJamSession && _jamSessionService.isHost) {
+                                                // Use a small delay to ensure seeking is complete
+                                                Future.delayed(const Duration(milliseconds: 100), () {
+                                                  _updateJamSessionPlayback();
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+
+                                      // Total duration
+                                      Text(
+                                        _formatDuration(totalDuration),
+                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-
-                              // Total duration
-                              Text(
-                                _formatDuration(totalDuration),
-                                style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
                               ),
                             ],
                           ),
@@ -1108,14 +1061,49 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
           // Full screen music player overlay
           if (isFullScreen) _buildFullScreenPlayer(),
 
-          // If lyrics overlay is toggled, display it on top of the MusicPlayer UI.
-          if (showLyrics) _buildLyricsOverlay(),
+          // Lyrics overlay - moved to end of stack for proper z-order
+          if (showLyrics)
+            Positioned(
+              bottom: 90,
+              right: 100,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.transparent,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LyricsPanel(
+                      lyrics: widget.song['song_lyrics'],
+                      onClose: () => setState(() => showLyrics = false),
+                      currentPosition: currentPosition,
+                      totalDuration: totalDuration,
+                      accentColor: accentColor,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 20.0),
+                        child: SizedBox(
+                          width: 20,
+                          height: 10,
+                          child: CustomPaint(
+                            painter: TrianglePointer(const Color(0xFF121212)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
-          // Jam Session indicator
-          if (_isInJamSession) JamSessionIndicator(
-            isHost: _jamSessionService.isHost,
-            hostName: _jamSessionService.currentSession?['host_name'] ?? 'Unknown',
-          ),
+          // Jam Session indicator - should be on top of everything
+          if (_isInJamSession)
+            JamSessionIndicator(
+              isHost: _jamSessionService.isHost,
+              hostName: _jamSessionService.currentSession?['host_name'] ?? 'Unknown',
+            ),
         ],
       ),
     );
@@ -1145,4 +1133,29 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       ),
     );
   }
+}
+
+// Custom painter for drawing the triangle pointer
+class TrianglePointer extends CustomPainter {
+  final Color color;
+
+  TrianglePointer(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

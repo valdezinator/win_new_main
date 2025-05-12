@@ -24,7 +24,7 @@ class ContentView extends StatefulWidget {
   final VoidCallback? onBackPressed;
 
   const ContentView({
-    Key? key,
+    super.key,
     required this.initialContentType,
     this.contentData,
     required this.supabaseClient,
@@ -32,7 +32,7 @@ class ContentView extends StatefulWidget {
     this.currentlyPlayingSong,
     required this.audioService,
     this.onBackPressed,
-  }) : super(key: key);
+  });
 
   @override
   _ContentViewState createState() => _ContentViewState();

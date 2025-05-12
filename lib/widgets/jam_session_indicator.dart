@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import '../services/jam_session_service.dart';
 
 class JamSessionIndicator extends StatelessWidget {
   final bool isHost;
   final String hostName;
 
   const JamSessionIndicator({
-    Key? key,
+    super.key,
     required this.isHost,
     required this.hostName,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

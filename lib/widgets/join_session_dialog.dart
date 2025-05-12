@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class JoinSessionDialog extends StatefulWidget {
   final Function(String sessionId) onJoin;
 
-  const JoinSessionDialog({Key? key, required this.onJoin}) : super(key: key);
+  const JoinSessionDialog({super.key, required this.onJoin});
 
   @override
   _JoinSessionDialogState createState() => _JoinSessionDialogState();

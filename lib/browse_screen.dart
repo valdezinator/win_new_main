@@ -3,6 +3,8 @@ import 'package:supabase/supabase.dart';
 import 'music_player.dart';
 import 'widgets/queue_list.dart';
 import 'dart:math';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -536,13 +538,23 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
+                        style: GoogleFonts.montserrat(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'What do you want to listen to?',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                          hintStyle: GoogleFonts.montserrat(
+                          color: Colors.grey[400],
+                          // No direct margin property, so use a Container as prefix
+                          ),
+                          prefixIcon: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: SvgPicture.asset(
+                            'assets/icons/browse_icon.svg',
+                            width: 24,
+                            height: 24,
+                          ),
+                          ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          contentPadding: const EdgeInsets.fromLTRB(16, 15, 16, 12), // Increased top padding for hint text
                         ),
                         onChanged: (value) => searchSongs(value),
                       ),
