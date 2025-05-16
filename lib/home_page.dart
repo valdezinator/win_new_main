@@ -1202,15 +1202,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withOpacity(0.5),
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            color: Colors.white,
-                            size: 24,
-                          ),
                         ),
                       ),
                     ),
@@ -1400,6 +1391,7 @@ class ArtistDetailsPage extends StatefulWidget {
 class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
   final SupabaseClient supabaseClient = Supabase.instance.client;
   bool _isFollowing = false;
+  bool _isFollowLoading = false;
   Color _dominantColor = Colors.black;
   bool _isLoadingColor = true;
   final ScrollController _scrollController = ScrollController();
@@ -1408,6 +1400,89 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
   void initState() {
     super.initState();
     _extractDominantColor();
+    _checkIfFollowing();
+  }
+  Future<void> _checkIfFollowing() async {
+    final user = supabaseClient.auth.currentUser;
+    if (user == null) return;
+    // Get artist id from "artists" table using artist name if not present
+    String? artistId = widget.artist['id'];
+    if (artistId == null) {
+      final artistRow = await supabaseClient
+          .from('artists')
+          .select('id')
+          .eq('name', widget.artist['name'])
+          .maybeSingle();
+      artistId = artistRow != null ? artistRow['id'] as String? : null;
+    }
+    if (artistId == null) {
+      setState(() {
+        _isFollowing = false;
+      });
+      return;
+    }
+    // Check if user is following this artist in artist_followers table
+    final response = await supabaseClient
+        .from('artist_followers')
+        .select()
+        .eq('artist_id', artistId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+    setState(() {
+      _isFollowing = response != null;
+    });
+    // Save artist id to widget.artist for later use
+    widget.artist['id'] = artistId;
+  }
+
+  Future<void> _toggleFollowSupabase() async {
+    final user = supabaseClient.auth.currentUser;
+    if (user == null) return;
+    setState(() {
+      _isFollowLoading = true;
+    });
+    // Get artist id from "artists" table using artist name if not present
+    String? artistId = widget.artist['id'];
+    if (artistId == null) {
+      final artistRow = await supabaseClient
+          .from('artists')
+          .select('id')
+          .eq('name', widget.artist['name'])
+          .maybeSingle();
+      artistId = artistRow != null ? artistRow['id'] as String? : null;
+    }
+    if (artistId == null) {
+      setState(() {
+        _isFollowLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Artist not found.')),
+      );
+      return;
+    }
+    widget.artist['id'] = artistId;
+    if (_isFollowing) {
+      // Unfollow
+      await supabaseClient
+          .from('artist_followers')
+          .delete()
+          .eq('artist_id', artistId)
+          .eq('user_id', user.id);
+      setState(() {
+        _isFollowing = false;
+        _isFollowLoading = false;
+      });
+    } else {
+      // Follow
+      await supabaseClient.from('artist_followers').insert({
+        'artist_id': artistId,
+        'user_id': user.id,
+      });
+      setState(() {
+        _isFollowing = true;
+        _isFollowLoading = false;
+      });
+    }
   }
 
   @override
@@ -1505,10 +1580,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
   }
 
   void _toggleFollow() {
-    setState(() {
-      _isFollowing = !_isFollowing;
-    });
-    // In a real app, you would update the database
+    _toggleFollowSupabase();
   }
 
   // Method to fetch the artist's biography from Supabase
@@ -1526,7 +1598,11 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
           .from('artist_page')
           .select('artist_details')
           .eq('artist_name', artistName)
-          .single();
+          .maybeSingle();
+
+      if (response == null) {
+        return 'No biography available for this artist.';
+      }
 
       // Extract the bio from the response
       final bio = response['artist_details'] as String?;
@@ -1723,24 +1799,33 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                             const SizedBox(width: 16),
 
                             // Follow button
-                            OutlinedButton(
-                              onPressed: _toggleFollow,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.grey),
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(32),
+                      OutlinedButton(
+                        onPressed: _isFollowLoading ? null : _toggleFollow,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.grey),
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(32),
+                          ),
+                        ),
+                        child: _isFollowLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
                                 ),
-                              ),
-                              child: Text(
+                              )
+                            : Text(
                                 _isFollowing ? 'Following' : 'Follow',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
+                      ),
                             const SizedBox(width: 16),
 
                             // More options
@@ -1756,22 +1841,31 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                         Row(
                           children: [
                             // Follow button
-                            OutlinedButton(
-                              onPressed: _toggleFollow,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.grey),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(32),
+                      OutlinedButton(
+                        onPressed: _isFollowLoading ? null : _toggleFollow,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(32),
+                          ),
+                        ),
+                        child: _isFollowLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
                                 ),
-                              ),
-                              child: Text(
+                              )
+                            : Text(
                                 _isFollowing ? 'Following' : 'Follow',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
+                      ),
                             const SizedBox(width: 16),
 
                             // Play button (circular)
