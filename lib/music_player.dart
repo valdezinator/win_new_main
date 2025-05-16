@@ -9,7 +9,7 @@ import 'dart:async';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'widgets/jam_session_indicator.dart';
-import 'widgets/lyrics_panel.dart';
+// import 'widgets/lyrics_panel.dart'; // Commented out lyrics functionality
 import 'package:google_fonts/google_fonts.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -34,7 +34,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
   bool isInLibrary = true;
-  bool showLyrics = false;
+  // bool showLyrics = false; // Commented out lyrics functionality
   bool isFullScreen = false;
   double volume = 0.8;
   Duration currentPosition = Duration.zero;
@@ -237,8 +237,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     if (isRepeatEnabled) {
       // Replay the current song
       final songToReplay = Map<String, dynamic>.from(widget.song);
-      // Ensure lyrics data is preserved
-      songToReplay['song_lyrics'] = widget.song['song_lyrics'];
+      // Ensure lyrics data is preserved - commented out
+      // songToReplay['song_lyrics'] = widget.song['song_lyrics'];
       _audioService.playSong(songToReplay);
     } else if (isShuffleEnabled) {
       // Play a random song from the queue
@@ -251,8 +251,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       if (currentQueue.length == 1 && currentIndex != -1) {
         // Only one song in queue, replay if shuffle is on
         final songToReplay = Map<String, dynamic>.from(widget.song);
-        // Ensure lyrics data is preserved
-        songToReplay['song_lyrics'] = widget.song['song_lyrics'];
+        // Ensure lyrics data is preserved - commented out
+        // songToReplay['song_lyrics'] = widget.song['song_lyrics'];
         _audioService.playSong(songToReplay);
         return;
       }
@@ -267,7 +267,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       final Map<String, dynamic> songToPlay = {
         ...nextRandomSongDetails,
         'queue': currentQueue, // Pass the full original queue
-        'song_lyrics': nextRandomSongDetails['song_lyrics'], // Preserve lyrics data
+        // 'song_lyrics': nextRandomSongDetails['song_lyrics'], // Preserve lyrics data - commented out
       };
       _audioService.playSong(songToPlay);
     } else {
@@ -994,20 +994,20 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           ),
                           const SizedBox(width: 12),
 
-                          // Lyrics button
-                          _buildHoverButton(
-                            child: Icon(
-                              Icons.format_quote,
-                              color: showLyrics ? accentColor : textColor.withOpacity(0.7),
-                              size: 16,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                showLyrics = !showLyrics;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 12),
+                          // Lyrics button - commented out
+                          // _buildHoverButton(
+                          //   child: Icon(
+                          //     Icons.format_quote,
+                          //     color: showLyrics ? accentColor : textColor.withOpacity(0.7),
+                          //     size: 16,
+                          //   ),
+                          //   onPressed: () {
+                          //     setState(() {
+                          //       showLyrics = !showLyrics;
+                          //     });
+                          //   },
+                          // ),
+                          // const SizedBox(width: 12),
 
                           // Volume control
                           Icon(
@@ -1061,42 +1061,42 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
           // Full screen music player overlay
           if (isFullScreen) _buildFullScreenPlayer(),
 
-          // Lyrics overlay - moved to end of stack for proper z-order
-          if (showLyrics)
-            Positioned(
-              bottom: 90,
-              right: 100,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LyricsPanel(
-                      lyrics: widget.song['song_lyrics'],
-                      onClose: () => setState(() => showLyrics = false),
-                      currentPosition: currentPosition,
-                      totalDuration: totalDuration,
-                      accentColor: accentColor,
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 20.0),
-                        child: SizedBox(
-                          width: 20,
-                          height: 10,
-                          child: CustomPaint(
-                            painter: TrianglePointer(const Color(0xFF121212)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          // Lyrics overlay - commented out
+          // if (showLyrics)
+          //   Positioned(
+          //     bottom: 90,
+          //     right: 100,
+          //     child: Material(
+          //       elevation: 8,
+          //       borderRadius: BorderRadius.circular(8),
+          //       color: Colors.transparent,
+          //       child: Column(
+          //         mainAxisSize: MainAxisSize.min,
+          //         children: [
+          //           LyricsPanel(
+          //             lyrics: widget.song['song_lyrics'],
+          //             onClose: () => setState(() => showLyrics = false),
+          //             currentPosition: currentPosition,
+          //             totalDuration: totalDuration,
+          //             accentColor: accentColor,
+          //           ),
+          //           Align(
+          //             alignment: Alignment.centerRight,
+          //             child: Padding(
+          //               padding: const EdgeInsets.only(right: 20.0),
+          //               child: SizedBox(
+          //                 width: 20,
+          //                 height: 10,
+          //                 child: CustomPaint(
+          //                   painter: TrianglePointer(const Color(0xFF121212)),
+          //                 ),
+          //               ),
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     ),
+          //   ),
 
           // Jam Session indicator - should be on top of everything
           if (_isInJamSession)

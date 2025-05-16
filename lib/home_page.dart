@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration, song_lyrics')
+          .select('id, title, artist, audio_url, image_url, duration') // 'song_lyrics' commented out
           .order('created_at');
 
       if (response.isEmpty) {
@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration, play_count, song_lyrics')
+          .select('id, title, artist, audio_url, image_url, duration, play_count') // 'song_lyrics' commented out
           .order('play_count', ascending: false)
           .limit(10);
       final trendingList = List<Map<String, dynamic>>.from(response);
@@ -441,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         'image_url': song['image_url'] ?? '', // Ensure image_url exists
         'artist': song['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
-        'song_lyrics': song['song_lyrics'], // Include lyrics data
+        // 'song_lyrics': song['song_lyrics'], // Include lyrics data - commented out
       };
 
       // Play the song - this will update the UI through the stream listener
@@ -1426,7 +1426,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
       // Fetch songs for this artist where isTop is TRUE
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, duration, audio_url, image_url, play_count, song_lyrics')
+          .select('id, title, artist, duration, audio_url, image_url, play_count') // 'song_lyrics' commented out
           .eq('artist', widget.artist['name'])
           .eq('isTop', true)
           .order('play_count', ascending: false)
@@ -1438,7 +1438,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
       if (tracks.isEmpty) {
         final fallbackResponse = await supabaseClient
             .from('songs_2')
-            .select('id, title, artist, duration, audio_url, image_url, play_count, song_lyrics')
+            .select('id, title, artist, duration, audio_url, image_url, play_count') // 'song_lyrics' commented out
             .eq('artist', widget.artist['name'])
             .order('play_count', ascending: false)
             .limit(5);
