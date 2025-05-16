@@ -3,13 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'package:palette_generator/palette_generator.dart';
-import 'dart:math';
+import 'dart:math' show Random;
 import 'dart:ui';
 import 'dart:async';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
+import 'services/noise_detection_service.dart';
+import 'services/route_tracking_service.dart';
 import 'widgets/jam_session_indicator.dart';
-// import 'widgets/lyrics_panel.dart'; // Commented out lyrics functionality
+import 'widgets/adaptive_features_indicator.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -31,6 +33,9 @@ class MusicPlayer extends StatefulWidget {
 class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin {
   final AudioService _audioService = AudioService();
   final JamSessionService _jamSessionService = JamSessionService();
+  final NoiseDetectionService _noiseDetectionService = NoiseDetectionService();
+  final RouteTrackingService _routeTrackingService = RouteTrackingService();
+  
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
   bool isInLibrary = true;
@@ -43,6 +48,10 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   bool isPlaying = false;
   FocusNode? _focusNode;
   bool _isInJamSession = false;
+  
+  // Track active states of adaptive features
+  bool _noiseAdaptiveActive = false;
+  bool _routeCacheActive = false;
 
   // Animation controller for full screen transition
   late AnimationController _fullScreenAnimController;
@@ -58,7 +67,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
   // Timer for periodic jam session updates
   Timer? _jamSessionUpdateTimer;
-    @override
+  @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
@@ -66,6 +75,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
+    
+    // Monitor adaptive features active state
+    _setupAdaptiveFeaturesListeners();
 
     // Initialize full screen animation controller
     _fullScreenAnimController = AnimationController(
@@ -142,6 +154,31 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         }
       });
     });
+  }
+
+  // Set up listeners for adaptive features active state
+  void _setupAdaptiveFeaturesListeners() {
+    // Add listeners for noise detection service
+    _noiseDetectionService.addListener(() {
+      if (mounted) {
+        setState(() {
+          _noiseAdaptiveActive = _noiseDetectionService.isActive;
+        });
+      }
+    });
+    
+    // Add listeners for route tracking service
+    _routeTrackingService.addListener(() {
+      if (mounted) {
+        setState(() {
+          _routeCacheActive = _routeTrackingService.isActive;
+        });
+      }
+    });
+    
+    // Get initial state
+    _noiseAdaptiveActive = _noiseDetectionService.isActive;
+    _routeCacheActive = _routeTrackingService.isActive;
   }
 
   Future<void> _setupAudioPlayer() async {
@@ -244,31 +281,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       // Play a random song from the queue
       final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
       if (currentQueue.isEmpty) return;
-
+      
       final random = Random();
-      final currentIndex = currentQueue.indexWhere((s) => s['id'] == widget.song['id']);
-
-      if (currentQueue.length == 1 && currentIndex != -1) {
-        // Only one song in queue, replay if shuffle is on
-        final songToReplay = Map<String, dynamic>.from(widget.song);
-        // Ensure lyrics data is preserved - commented out
-        // songToReplay['song_lyrics'] = widget.song['song_lyrics'];
-        _audioService.playSong(songToReplay);
-        return;
-      }
-      if (currentQueue.length <= 1) return; // Not enough songs to shuffle
-
-      int nextIndex;
-      do {
-        nextIndex = random.nextInt(currentQueue.length);
-      } while (nextIndex == currentIndex); // Ensure it's a different song
-
-      final Map<String, dynamic> nextRandomSongDetails = Map<String, dynamic>.from(currentQueue[nextIndex]);
-      final Map<String, dynamic> songToPlay = {
-        ...nextRandomSongDetails,
-        'queue': currentQueue, // Pass the full original queue
-        // 'song_lyrics': nextRandomSongDetails['song_lyrics'], // Preserve lyrics data - commented out
-      };
+      final songToPlay = currentQueue[random.nextInt(currentQueue.length)];
       _audioService.playSong(songToPlay);
     } else {
       // Play the next song
@@ -655,9 +670,10 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     final seconds = duration.inSeconds % 60;
     return "$minutes:${seconds.toString().padLeft(2, '0')}";
   }
-
   @override
   Widget build(BuildContext context) {
+    // Show visual indicators for adaptive features
+    final showAdaptiveIndicators = _noiseAdaptiveActive || _routeCacheActive;
     return KeyboardListener(
       focusNode: _fullScreenFocusNode,
       onKeyEvent: (KeyEvent event) {
@@ -891,14 +907,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                             max: totalDuration.inSeconds.toDouble(),
                                             onChanged: (value) {
                                               _audioService.player.seek(Duration(seconds: value.toInt()));
-
-                                              // Update jam session if host
-                                              if (_isInJamSession && _jamSessionService.isHost) {
-                                                // Use a small delay to ensure seeking is complete
-                                                Future.delayed(const Duration(milliseconds: 100), () {
-                                                  _updateJamSessionPlayback();
-                                                });
-                                              }
                                             },
                                           ),
                                         ),

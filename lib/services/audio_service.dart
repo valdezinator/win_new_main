@@ -20,6 +20,11 @@ class AudioService {
   List<Map<String, dynamic>> _queue = [];
   int _currentIndex = -1;
   bool _isPlaying = false;
+  
+  // For volume and crossfade control
+  double _baseVolume = 0.7;
+  int? _baseCrossfadeDuration;
+  bool _adaptiveVolumeEnabled = false;
 
   Stream<Map<String, dynamic>> get currentSongStream => _currentSongController.stream;
   Stream<bool> get isPlayingStream => _isPlayingController.stream;
@@ -378,6 +383,48 @@ class AudioService {
   Future<List<Map<String, dynamic>>> getDownloadedAlbums() async {
     return await _downloadService.getDownloadedAlbums();
   }
+
+  /// Adjust player volume relative to base volume level
+  /// Used by NoiseDetectionService to increase volume in noisy environments
+  /// @param increment - percentage increase (0.1 = 10% increase)
+  void adjustVolume(double increment) {
+    if (!_adaptiveVolumeEnabled) return;
+    
+    final currentVolume = player.volume;
+    final newVolume = currentVolume + increment;
+    
+    // Cap volume at 1.0
+    player.setVolume(newVolume.clamp(0.0, 1.0));
+  }
+  
+  /// Reset volume to base level
+  void resetVolume() {
+    player.setVolume(_baseVolume);
+  }
+    /// Set crossfade duration for transitions between tracks
+  /// @param milliseconds - duration of crossfade in milliseconds, null to use default
+  void setCrossfadeDuration(int? milliseconds) {
+    // Store the value to use when playing next songs
+    _baseCrossfadeDuration = milliseconds;
+    
+    // In a full implementation, we would configure crossfade between tracks
+    // For now, we just store the value to use when configuring playback
+    // The actual crossfade implementation depends on just_audio capabilities
+    // and would be applied when setting up audio sources
+  }
+  
+  /// Enable or disable adaptive volume adjustments
+  void setAdaptiveVolumeEnabled(bool enabled) {
+    _adaptiveVolumeEnabled = enabled;
+    
+    // Reset to base volume if disabled
+    if (!enabled) {
+      resetVolume();
+    }
+  }
+  
+  /// Get current state of adaptive volume feature
+  bool get adaptiveVolumeEnabled => _adaptiveVolumeEnabled;
 
   Future<void> dispose() async {
     await _saveLastPlayedSong();

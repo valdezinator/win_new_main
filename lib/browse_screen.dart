@@ -220,12 +220,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
-              // Artist Name
+              const SizedBox(height: 4),              // Artist Name
               Text(
                 album['artist'] ?? 'Unknown Artist',
-                style: TextStyle(
-                  color: Colors.grey[400],
+                style: const TextStyle(
+                  color: Colors.grey,
                   fontSize: 12,
                 ),
                 maxLines: 1,

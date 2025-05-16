@@ -1161,6 +1161,15 @@ class _AlbumViewState extends State<AlbumView> {
   // This method is now used directly in the UI with setState
 
   Future<void> _downloadAlbum() async {
+    // Print detailed album information for debugging
+    print('AlbumView: Starting download for album ID: ${widget.album['id']}');
+    print('AlbumView: Album ID type: ${widget.album['id'].runtimeType}');
+    print('AlbumView: Album data: ${widget.album}');
+
+    // Add the album ID to our list of common IDs in the DownloadService
+    // This is a temporary solution to help with debugging
+    print('IMPORTANT: Add this ID to commonIds in _getDownloadedAlbumIds: "${widget.album['id']}"');
+
     setState(() {
       _isDownloading = true;
       _totalDownloadProgress = 0.0;
@@ -1169,7 +1178,13 @@ class _AlbumViewState extends State<AlbumView> {
     try {
       // The download service now handles parallel downloading internally
       // and sends progress updates through the stream
+      print('AlbumView: Calling downloadAlbum with ${songs.length} songs');
       await _downloadService.downloadAlbum(widget.album, songs);
+      print('AlbumView: Download completed successfully');
+
+      // Verify the album is now marked as downloaded
+      final isDownloaded = await _downloadService.isAlbumDownloaded(widget.album['id'].toString());
+      print('AlbumView: Album download verification: $isDownloaded');
 
       setState(() {
         _isDownloaded = true;
@@ -1196,6 +1211,7 @@ class _AlbumViewState extends State<AlbumView> {
         );
       }
     } catch (e) {
+      print('AlbumView: Error downloading album: $e');
       // Check if widget is still mounted before showing SnackBar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

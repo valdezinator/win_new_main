@@ -161,7 +161,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<List<Map<String, dynamic>>> fetchDownloadedAlbums() async {
     try {
+      print('HomeScreen: Fetching downloaded albums');
       final albums = await _audioService.getDownloadedAlbums();
+      print('HomeScreen: Received ${albums.length} downloaded albums from AudioService');
 
       // Check if we're online
       bool isOnline = true;
@@ -172,6 +174,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         isOnline = false;
       }
 
+      print('HomeScreen: Online status: $isOnline');
+
       // If we're offline, add a flag to indicate this
       if (!isOnline) {
         for (var album in albums) {
@@ -179,8 +183,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
 
+      // Log album details for debugging
+      for (var album in albums) {
+        print('HomeScreen: Downloaded album - ID: ${album['id']}, Title: ${album['title']}');
+      }
+
       return albums;
     } catch (e) {
+      print('HomeScreen: Error fetching downloaded albums: $e');
       return [];
     }
   }
@@ -190,12 +200,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final response = await supabaseClient
           .from('user_play_history')
           .select('*, songs(*)')
-          .order('played_at', ascending: false)
-          .limit(10);
+          .order('played_at', ascending: false);
+
+      if (response.isEmpty) {
+        return [];
+      }
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      //print('Error fetching recently played: $e');
+      print('Error fetching recently played: $e');
       return [];
     }
   }
@@ -770,76 +783,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const SizedBox(height: 40),
 
             // Downloaded Albums Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Downloaded Albums',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to see all downloaded albums
-                  },
-                  child: Text(
-                    'See All',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 260,
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: fetchDownloadedAlbums(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+            // Row(
+            //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //   children: [
+            //     Text(
+            //       'Downloaded Albums',
+            //       style: GoogleFonts.montserrat(
+            //         fontSize: 22,
+            //         fontWeight: FontWeight.w300,
+            //         color: Colors.white,
+            //       ),
+            //     ),
+            //     TextButton(
+            //       onPressed: () {
+            //         // Navigate to see all downloaded albums
+            //       },
+            //       child: Text(
+            //         'See All',
+            //         style: TextStyle(
+            //           fontSize: 14,
+            //           color: Colors.grey[400],
+            //         ),
+            //       ),
+            //     ),
+            //   ],
+            // ),
+            // const SizedBox(height: 16),
+            // SizedBox(
+            //   height: 260,
+            //   child: FutureBuilder<List<Map<String, dynamic>>>(
+            //     future: fetchDownloadedAlbums(),
+            //     builder: (context, snapshot) {
+            //       if (snapshot.connectionState == ConnectionState.waiting) {
+            //         return const Center(child: CircularProgressIndicator());
+            //       }
 
-                  final albums = snapshot.data ?? [];
+            //       final albums = snapshot.data ?? [];
 
-                  if (albums.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.download_done, size: 48, color: Colors.grey[600]),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No downloaded albums yet',
-                            style: TextStyle(color: Colors.grey[400], fontSize: 16),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Download albums to listen offline',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
+            //       if (albums.isEmpty) {
+            //         return Center(
+            //           child: Column(
+            //             mainAxisAlignment: MainAxisAlignment.center,
+            //             children: [
+            //               Icon(Icons.download_done, size: 48, color: Colors.grey[600]),
+            //               const SizedBox(height: 16),
+            //               Text(
+            //                 'No downloaded albums yet',
+            //                 style: TextStyle(color: Colors.grey[400], fontSize: 16),
+            //               ),
+            //               const SizedBox(height: 8),
+            //               Text(
+            //                 'Download albums to listen offline',
+            //                 style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            //               ),
+            //             ],
+            //           ),
+            //         );
+            //       }
 
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: albums.length,
-                    itemBuilder: (context, index) {
-                      final album = albums[index];
-                      return _buildHitAlbumCard(album);
-                    },
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 40),
+            //       return ListView.builder(
+            //         scrollDirection: Axis.horizontal,
+            //         itemCount: albums.length,
+            //         itemBuilder: (context, index) {
+            //           final album = albums[index];
+            //           return _buildHitAlbumCard(album);
+            //         },
+            //       );
+            //     },
+            //   ),
+            // ),
+            // const SizedBox(height: 40),
 
             // Recommended Artists Section
             Row(
@@ -978,7 +991,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHitAlbumCard(Map<String, dynamic> album) {
-    final bool isDownloaded = album['downloaded'] == true || album['category']?.toString().contains('downloaded') == true;
+    // Check if the album is downloaded in multiple ways to ensure we catch all cases
+    final bool isDownloaded = album['downloaded'] == true ||
+                             album['category']?.toString().contains('downloaded') == true;
+
+    // Add downloaded flag to album data if it's downloaded
+    if (isDownloaded && album['downloaded'] != true) {
+      album['downloaded'] = true;
+      print('Marking album ${album['title']} (ID: ${album['id']}) as downloaded');
+    }
 
     return GestureDetector(
       onTap: () {

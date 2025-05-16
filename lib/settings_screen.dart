@@ -3,6 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'privacy/privacy_policy_widgets.dart';
+import 'services/noise_detection_service.dart';
+import 'services/route_tracking_service.dart';
+
 /// SettingsScreen: Comprehensive settings page for the music app
 /// Sections: Account, Playback, Notifications, Appearance, Privacy, About
 class SettingsScreen extends StatefulWidget {
@@ -19,6 +23,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _gapless = false;
   String _audioQuality = 'High';
   bool _wifiOnly = true;
+  bool _noiseAdaptiveCrossfade = false; // New setting
+  bool _offlineRouteCache = false; // New setting
 
   // Notification settings
   bool _notifyNewReleases = true;
@@ -38,13 +44,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // About
   String _appVersion = '';
-
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _fetchUserProfile();
     _getAppVersion();
+    _initializeServices();
+  }
+  
+  // Initialize noise detection and route tracking services
+  Future<void> _initializeServices() async {
+    // Initialize services
+    await NoiseDetectionService().initialize();
+    await RouteTrackingService().initialize();
+    
+    // Apply current settings to services
+    final noiseService = NoiseDetectionService();
+    final routeService = RouteTrackingService();
+    
+    if (_noiseAdaptiveCrossfade && !noiseService.hasPermission) {
+      // Request permission if feature is enabled but permission not granted
+      await noiseService.requestPermission();
+    }
+    
+    if (_offlineRouteCache && !routeService.hasPermission) {
+      // Request permission if feature is enabled but permission not granted
+      await routeService.requestPermission();
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -60,6 +87,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _theme = prefs.getString('theme') ?? 'System';
       int? colorValue = prefs.getInt('accent_color');
       if (colorValue != null) _accentColor = Color(colorValue);
+      _noiseAdaptiveCrossfade = prefs.getBool('noise_adaptive_crossfade') ?? false; // Load new setting
+      _offlineRouteCache = prefs.getBool('offline_route_cache') ?? false; // Load new setting
     });
   }
 
@@ -155,13 +184,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   .toList(),
               onChanged: (v) { if (v != null) { setState(() => _audioQuality = v); _saveSetting('audio_quality', v); } },
             ),
-          ),
-          SwitchListTile(
+          ),          SwitchListTile(
             value: _wifiOnly,
-            onChanged: (v) { setState(() => _wifiOnly = v); _saveSetting('wifi_only', v); },
+            onChanged: (v) { 
+              setState(() => _wifiOnly = v); 
+              _saveSetting('wifi_only', v); 
+              // Update route tracking service if enabled
+              if (_offlineRouteCache) {
+                RouteTrackingService().setWifiOnlyDownloads(v);
+              }
+            },
             title: const Text('Download over Wi-Fi only', style: TextStyle(color: Colors.white)),
             subtitle: const Text('Prevent mobile data usage'),
             activeColor: _accentColor,
+          ),Row(
+            children: [
+              Expanded(
+                child: SwitchListTile(
+                  value: _noiseAdaptiveCrossfade,
+                  onChanged: (v) { 
+                    setState(() => _noiseAdaptiveCrossfade = v); 
+                    _saveSetting('noise_adaptive_crossfade', v); 
+                    // Initialize or disable the noise detection service
+                    NoiseDetectionService().setEnabled(v);
+                  },
+                  title: const Text('Noise Adaptive Crossfade', style: TextStyle(color: Colors.white)),
+                  subtitle: const Text('Adjust volume based on ambient noise'),
+                  activeColor: _accentColor,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.info_outline, color: Colors.white70),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const NoiseDetectionPrivacyPolicy(),
+                  );
+                },
+              ),
+            ],
+          ),          Row(
+            children: [
+              Expanded(
+                child: SwitchListTile(
+                  value: _offlineRouteCache,
+                  onChanged: (v) { 
+                    setState(() => _offlineRouteCache = v); 
+                    _saveSetting('offline_route_cache', v); 
+                    // Initialize or disable the route tracking service
+                    RouteTrackingService().setEnabled(v);
+                    // Update WiFi only setting for route service
+                    RouteTrackingService().setWifiOnlyDownloads(_wifiOnly);
+                  },
+                  title: const Text('Offline Route Cache', style: TextStyle(color: Colors.white)),
+                  subtitle: const Text('Download music for areas with poor connectivity'),
+                  activeColor: _accentColor,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.info_outline, color: Colors.white70),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const RouteTrackingPrivacyPolicy(),
+                  );
+                },
+              ),
+            ],
           ),
           const Divider(color: Colors.white24),
 
