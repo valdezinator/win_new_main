@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' show Random;
 import 'dart:ui';
 import 'dart:async';
@@ -12,6 +13,7 @@ import 'services/noise_detection_service.dart';
 import 'services/route_tracking_service.dart';
 import 'widgets/jam_session_indicator.dart';
 import 'widgets/adaptive_features_indicator.dart';
+import 'widgets/lyrics_panel.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -39,7 +41,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
   bool isInLibrary = true;
-  // bool showLyrics = false; // Commented out lyrics functionality
+  bool showLyrics = false;
   bool isFullScreen = false;
   double volume = 0.8;
   Duration currentPosition = Duration.zero;
@@ -270,6 +272,24 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     }
   }
 
+  Future<void> _fetchLyrics(String songId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('songs_2')
+          .select('song_lyrics')
+          .eq('id', songId)
+          .single();
+      
+      if (response != null && mounted) {
+        setState(() {
+          widget.song['song_lyrics'] = response['song_lyrics'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching lyrics: $e');
+    }
+  }
+
   void _handleSongCompletion() {
     if (isRepeatEnabled) {
       // Replay the current song
@@ -308,6 +328,15 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       }
     });
   }
+  void toggleLyrics() {
+    setState(() {
+      showLyrics = !showLyrics;
+      if (showLyrics && widget.song['song_lyrics'] == null && widget.song['id'] != null) {
+        _fetchLyrics(widget.song['id'].toString());
+      }
+    });
+  }
+
   void _handlePlayPause() {
     _audioService.togglePlayPause();
 
@@ -373,8 +402,14 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       setState(() {
         currentPosition = Duration.zero;
         totalDuration = Duration.zero;
+        showLyrics = false; // Reset lyrics panel state
       });
       _audioService.playSong(widget.song);
+      
+      // Fetch lyrics for the new song
+      if (widget.song['id'] != null) {
+        _fetchLyrics(widget.song['id'].toString());
+      }
 
       // Update the color palette for the new song
       _updatePaletteGenerator();
@@ -1000,22 +1035,21 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                             ),
                             onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
                           ),
+                          const SizedBox(width: 12),                          // Lyrics button
+                          _buildHoverButton(
+                            child: Icon(
+                              Icons.format_quote,
+                              color: showLyrics ? accentColor : textColor.withOpacity(0.7),
+                              size: 16,
+                            ),
+                            onPressed: () {
+                              toggleLyrics();
+                              if (showLyrics && widget.song['song_lyrics'] == null && widget.song['id'] != null) {
+                                _fetchLyrics(widget.song['id'].toString());
+                              }
+                            },
+                          ),
                           const SizedBox(width: 12),
-
-                          // Lyrics button - commented out
-                          // _buildHoverButton(
-                          //   child: Icon(
-                          //     Icons.format_quote,
-                          //     color: showLyrics ? accentColor : textColor.withOpacity(0.7),
-                          //     size: 16,
-                          //   ),
-                          //   onPressed: () {
-                          //     setState(() {
-                          //       showLyrics = !showLyrics;
-                          //     });
-                          //   },
-                          // ),
-                          // const SizedBox(width: 12),
 
                           // Volume control
                           Icon(
@@ -1069,42 +1103,72 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
           // Full screen music player overlay
           if (isFullScreen) _buildFullScreenPlayer(),
 
-          // Lyrics overlay - commented out
-          // if (showLyrics)
-          //   Positioned(
-          //     bottom: 90,
-          //     right: 100,
-          //     child: Material(
-          //       elevation: 8,
-          //       borderRadius: BorderRadius.circular(8),
-          //       color: Colors.transparent,
-          //       child: Column(
-          //         mainAxisSize: MainAxisSize.min,
-          //         children: [
-          //           LyricsPanel(
-          //             lyrics: widget.song['song_lyrics'],
-          //             onClose: () => setState(() => showLyrics = false),
-          //             currentPosition: currentPosition,
-          //             totalDuration: totalDuration,
-          //             accentColor: accentColor,
-          //           ),
-          //           Align(
-          //             alignment: Alignment.centerRight,
-          //             child: Padding(
-          //               padding: const EdgeInsets.only(right: 20.0),
-          //               child: SizedBox(
-          //                 width: 20,
-          //                 height: 10,
-          //                 child: CustomPaint(
-          //                   painter: TrianglePointer(const Color(0xFF121212)),
-          //                 ),
-          //               ),
-          //             ),
-          //           ),
-          //         ],
-          //       ),
-          //     ),
-          //   ),
+          // Animated lyrics panel slides in from the right
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            top: 80,
+            right: showLyrics ? 16 : -360, // 340 width + margin
+            bottom: 16,
+            width: 340,
+            child: IgnorePointer(
+              ignoring: !showLyrics,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: showLyrics ? 1.0 : 0.0,
+                child: Material(
+                  elevation: 16,
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.transparent,
+                  child: Container(
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF181A1F),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.08),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        // Lyrics content
+                        Positioned.fill(
+                          child: LyricsPanel(
+                            lyrics: widget.song['song_lyrics'],
+                            onClose: () => setState(() => showLyrics = false),
+                            currentPosition: currentPosition,
+                            totalDuration: totalDuration,
+                            accentColor: accentColor,
+                          ),
+                        ),
+                        // Close button (top right)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: _buildHoverButton(
+                            icon: Icons.close,
+                            color: Colors.white.withOpacity(0.85),
+                            size: 22,
+                            onPressed: () => setState(() => showLyrics = false),
+                            padding: const EdgeInsets.all(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
 
           // Jam Session indicator - should be on top of everything
           if (_isInJamSession)
