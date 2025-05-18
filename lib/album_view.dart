@@ -876,14 +876,13 @@ class _AlbumViewState extends State<AlbumView> {
                           Navigator.pop(context);
                           // TODO: Show share dialog
                         },
-                      ),
-                      if (song['downloadable'] == true)
+                      ),                      if (song['downloadable'] == true)
                         _buildMenuItem(
                           icon: Icons.download,
                           text: 'Download',
                           onTap: () {
                             Navigator.pop(context);
-                            // TODO: Start download
+                            _downloadSong(song);
                           },
                         ),
                       _buildMenuItem(
@@ -1225,6 +1224,77 @@ class _AlbumViewState extends State<AlbumView> {
       if (!_isDownloaded) {
         setState(() => _isDownloading = false);
       }
+    }
+  }
+
+  // Method to download a single song
+  Future<void> _downloadSong(Map<String, dynamic> song) async {
+    if (song['audio_url'] == null) {
+      _showErrorMessage('Cannot download: Audio URL is missing');
+      return;
+    }
+
+    print('AlbumView: Starting download for song ID: ${song['id']}');
+    
+    setState(() {
+      _isDownloading = true;
+      _totalDownloadProgress = 0.0;
+    });
+
+    try {
+      // Create a list with just this song for the download service
+      final songsList = [song];
+      
+      // Create a minimal album context for the download service
+      final singleSongAlbum = {
+        'id': song['id'],
+        'title': song['title'],
+        'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+        'image_url': song['image_url'] ?? widget.album['image_url'],
+      };
+
+      // Download the song
+      await _downloadService.downloadAlbum(singleSongAlbum, songsList);
+      
+      // Check if the song was successfully downloaded
+      final isSongDownloaded = await _downloadService.isSongDownloaded(song['id'].toString());
+      print('AlbumView: Song download verification: $isSongDownloaded');
+
+      setState(() {
+        _totalDownloadProgress = 1.0;
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                Text('${song['title']} downloaded successfully'),
+              ],
+            ),
+            backgroundColor: Colors.black87,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('AlbumView: Error downloading song: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download song: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isDownloading = false);
     }
   }
 

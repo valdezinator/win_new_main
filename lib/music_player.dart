@@ -20,12 +20,14 @@ class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
   final Function(bool)? onQueueToggle;
   final bool showQueue;
+  final Function({required Color accentColor, required Duration currentPosition, required Duration totalDuration, String? lyrics})? onShowLyrics;
 
   const MusicPlayer({
     super.key,
     required this.song,
     this.onQueueToggle,
     this.showQueue = false,
+    this.onShowLyrics,
   });
 
   @override
@@ -41,7 +43,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
   bool isInLibrary = true;
-  bool showLyrics = false;
   bool isFullScreen = false;
   double volume = 0.8;
   Duration currentPosition = Duration.zero;
@@ -63,7 +64,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
   // Color palette variables
   Color dominantColor = Colors.black;
-  Color textColor = Colors.white;
   Color accentColor = Colors.green;
   bool isDarkPalette = true;
 
@@ -252,9 +252,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
           final luminance = paletteGenerator.dominantColor?.color.computeLuminance() ?? 0;
           isDarkPalette = luminance < 0.5;
 
-          // Set text color based on palette brightness
-          textColor = isDarkPalette ? Colors.white : Colors.black;
-
           // Extract vibrant or accent color for highlights
           accentColor = paletteGenerator.vibrantColor?.color ??
                        paletteGenerator.lightVibrantColor?.color ??
@@ -265,7 +262,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       // Fallback if image loading fails
       setState(() {
         dominantColor = Colors.black;
-        textColor = Colors.white;
         accentColor = Colors.green;
         isDarkPalette = true;
       });
@@ -330,8 +326,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   }
   void toggleLyrics() {
     setState(() {
-      showLyrics = !showLyrics;
-      if (showLyrics && widget.song['song_lyrics'] == null && widget.song['id'] != null) {
+      // showLyrics = !showLyrics;
+      if (widget.song['song_lyrics'] == null && widget.song['id'] != null) {
         _fetchLyrics(widget.song['id'].toString());
       }
     });
@@ -402,7 +398,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       setState(() {
         currentPosition = Duration.zero;
         totalDuration = Duration.zero;
-        showLyrics = false; // Reset lyrics panel state
       });
       _audioService.playSong(widget.song);
       
@@ -521,13 +516,13 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
                           const SizedBox(height: 30),
 
-                          // Song title
+                          // Full screen song details
                           Text(
                             widget.song['title'] ?? 'Unknown',
                             style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.w300,
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w300,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -538,9 +533,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           Text(
                             widget.song['artist'] ?? 'Unknown Artist',
                             style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.w300,
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w300,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -560,7 +555,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       // Current position
                                       Text(
                                         _formatDuration(currentPosition),
-                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
                                       ),
                                       const SizedBox(width: 8),
 
@@ -589,7 +584,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       // Total duration
                                       Text(
                                         _formatDuration(totalDuration),
-                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
                                       ),
                                     ],
                                   ),
@@ -608,7 +603,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               _buildHoverButton(
                                 child: Icon(
                                   Icons.shuffle,
-                                  color: isShuffleEnabled ? accentColor : textColor.withOpacity(0.7),
+                                  color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
                                   size: 24,
                                 ),
                                 onPressed: toggleShuffle,
@@ -620,7 +615,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               // Previous button
                               _buildHoverButton(
                                 icon: Icons.skip_previous,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handlePrevious,
                                 size: 36,
                                 padding: const EdgeInsets.all(10),
@@ -633,7 +628,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 icon: isPlaying
                                   ? Icons.pause_circle_filled
                                   : Icons.play_circle_filled,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handlePlayPause,
                                 size: 64,
                                 padding: const EdgeInsets.all(10),
@@ -644,7 +639,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               // Next button
                               _buildHoverButton(
                                 icon: Icons.skip_next,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handleNext,
                                 size: 36,
                                 padding: const EdgeInsets.all(10),
@@ -656,7 +651,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               _buildHoverButton(
                                 child: Icon(
                                   Icons.repeat,
-                                  color: isRepeatEnabled ? accentColor : textColor.withOpacity(0.7),
+                                  color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
                                   size: 24,
                                 ),
                                 onPressed: toggleRepeat,
@@ -803,8 +798,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       final textPainter = TextPainter(
                                         text: TextSpan(
                                           text: text,
-                                          style: TextStyle(
-                                            color: textColor,
+                                          style: const TextStyle(
+                                            color: Colors.white,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -816,8 +811,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       if (textPainter.width > constraints.maxWidth) {
                                         return Marquee(
                                           text: text,
-                                          style: TextStyle(
-                                            color: textColor,
+                                          style: const TextStyle(
+                                            color: Colors.white,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -835,8 +830,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       }
                                       return Text(
                                         text,
-                                        style: TextStyle(
-                                          color: textColor,
+                                        style: const TextStyle(
+                                          color: Colors.white,
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -858,7 +853,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                         text: TextSpan(
                                           text: text,
                                           style: TextStyle(
-                                            color: textColor.withOpacity(0.7),
+                                            color: Colors.white.withOpacity(0.7),
                                             fontSize: 12,
                                           ),
                                         ),
@@ -870,7 +865,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                         return Marquee(
                                           text: text,
                                           style: TextStyle(
-                                            color: textColor.withOpacity(0.7),
+                                            color: Colors.white.withOpacity(0.7),
                                             fontSize: 12,
                                           ),
                                           scrollAxis: Axis.horizontal,
@@ -888,7 +883,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       return Text(
                                         text,
                                         style: TextStyle(
-                                          color: textColor.withOpacity(0.7),
+                                          color: Colors.white.withOpacity(0.7),
                                           fontSize: 12,
                                         ),
                                         maxLines: 1,
@@ -922,7 +917,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       // Current position
                                       Text(
                                         _formatDuration(currentPosition),
-                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
                                       ),
                                       const SizedBox(width: 8),
 
@@ -951,7 +946,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       // Total duration
                                       Text(
                                         _formatDuration(totalDuration),
-                                        style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10),
+                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
                                       ),
                                     ],
                                   ),
@@ -968,7 +963,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               _buildHoverButton(
                                 child: Icon(
                                   Icons.shuffle,
-                                  color: isShuffleEnabled ? accentColor : textColor.withOpacity(0.7),
+                                  color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
                                   size: 16,
                                 ),
                                 onPressed: toggleShuffle,
@@ -978,7 +973,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               // Previous button
                               _buildHoverButton(
                                 icon: Icons.skip_previous,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handlePrevious,
                                 size: 24,
                               ),
@@ -989,7 +984,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 icon: isPlaying
                                   ? Icons.pause_circle_filled
                                   : Icons.play_circle_filled,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handlePlayPause,
                                 size: 32,
                               ),
@@ -998,7 +993,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               // Next button
                               _buildHoverButton(
                                 icon: Icons.skip_next,
-                                color: textColor,
+                                color: Colors.white,
                                 onPressed: _handleNext,
                                 size: 24,
                               ),
@@ -1008,7 +1003,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                               _buildHoverButton(
                                 child: Icon(
                                   Icons.repeat,
-                                  color: isRepeatEnabled ? accentColor : textColor.withOpacity(0.7),
+                                  color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
                                   size: 16,
                                 ),
                                 onPressed: toggleRepeat,
@@ -1030,7 +1025,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           _buildHoverButton(
                             child: Icon(
                               Icons.queue_music,
-                              color: widget.showQueue ? accentColor : textColor.withOpacity(0.7),
+                              color: widget.showQueue ? accentColor : Colors.white.withOpacity(0.7),
                               size: 16,
                             ),
                             onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
@@ -1039,12 +1034,19 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           _buildHoverButton(
                             child: Icon(
                               Icons.format_quote,
-                              color: showLyrics ? accentColor : textColor.withOpacity(0.7),
+                              color: (widget.song['song_lyrics'] != null) ? accentColor : Colors.white.withOpacity(0.7),
                               size: 16,
                             ),
                             onPressed: () {
-                              toggleLyrics();
-                              if (showLyrics && widget.song['song_lyrics'] == null && widget.song['id'] != null) {
+                              if (widget.onShowLyrics != null) {
+                                widget.onShowLyrics!(
+                                  accentColor: accentColor,
+                                  currentPosition: currentPosition,
+                                  totalDuration: totalDuration,
+                                  lyrics: widget.song['song_lyrics'],
+                                );
+                              }
+                              if (widget.song['song_lyrics'] == null && widget.song['id'] != null) {
                                 _fetchLyrics(widget.song['id'].toString());
                               }
                             },
@@ -1054,7 +1056,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           // Volume control
                           Icon(
                             Icons.volume_up,
-                            color: textColor.withOpacity(0.7),
+                            color: Colors.white.withOpacity(0.7),
                             size: 16,
                           ),
                           const SizedBox(width: 4),
@@ -1067,9 +1069,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 trackHeight: 2,
                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
                                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
-                                activeTrackColor: textColor,
-                                inactiveTrackColor: textColor.withOpacity(0.3),
-                                thumbColor: textColor,
+                                activeTrackColor: Colors.white,
+                                inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                thumbColor: Colors.white,
                               ),
                               child: Slider(
                                 value: volume,
@@ -1086,7 +1088,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                           _buildHoverButton(
                             child: Icon(
                               isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                              color: isFullScreen ? accentColor : textColor.withOpacity(0.7),
+                              color: isFullScreen ? accentColor : Colors.white.withOpacity(0.7),
                               size: 20,
                             ),
                             onPressed: _toggleFullScreen,
@@ -1102,73 +1104,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
           // Full screen music player overlay
           if (isFullScreen) _buildFullScreenPlayer(),
-
-          // Animated lyrics panel slides in from the right
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOutCubic,
-            top: 80,
-            right: showLyrics ? 16 : -360, // 340 width + margin
-            bottom: 16,
-            width: 340,
-            child: IgnorePointer(
-              ignoring: !showLyrics,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: showLyrics ? 1.0 : 0.0,
-                child: Material(
-                  elevation: 16,
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.transparent,
-                  child: Container(
-                    height: double.infinity,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF181A1F),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.08),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      children: [
-                        // Lyrics content
-                        Positioned.fill(
-                          child: LyricsPanel(
-                            lyrics: widget.song['song_lyrics'],
-                            onClose: () => setState(() => showLyrics = false),
-                            currentPosition: currentPosition,
-                            totalDuration: totalDuration,
-                            accentColor: accentColor,
-                          ),
-                        ),
-                        // Close button (top right)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: _buildHoverButton(
-                            icon: Icons.close,
-                            color: Colors.white.withOpacity(0.85),
-                            size: 22,
-                            onPressed: () => setState(() => showLyrics = false),
-                            padding: const EdgeInsets.all(4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
 
           // Jam Session indicator - should be on top of everything
           if (_isInJamSession)

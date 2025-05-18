@@ -130,19 +130,43 @@ class _LoginScreenState extends State<LoginScreen> {
       _isBusy = true;
       _errorMessage = '';
     });
+
     HttpServer? server;
-    try {
-      // Start local server on port 8000
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8000);
-    } catch (e) {
+    // Try a range of ports starting from 8000
+    final ports = [8000, 8001, 8002, 8003, 8004];
+    
+    for (final port in ports) {
+      try {
+        server = await HttpServer.bind(
+          InternetAddress.loopbackIPv4, 
+          port,
+          shared: true  // Allow port sharing
+        );
+        debugPrint('Successfully bound to port $port');
+        break;
+      } catch (e) {
+        if (port == ports.last) {
+          setState(() {
+            _errorMessage = 'Failed to bind to any available port. Please check your firewall settings or try again later.';
+            _isBusy = false;
+          });
+          return;
+        }
+        debugPrint('Failed to bind to port $port, trying next port...');
+        continue;
+      }
+    }
+
+    if (server == null) {
       setState(() {
-        _errorMessage = 'Failed to bind local server: $e';
+        _errorMessage = 'Failed to create server';
         _isBusy = false;
       });
       return;
     }
+
     try {
-      // Declare mutable subscription before assigning.
+      // Declare mutable subscription before assigning
       StreamSubscription? subscription;
       subscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
         debugPrint("Auth state changed: ${data.event}");
@@ -165,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Launch OAuth flow with redirectTo pointing to the local server.
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'http://localhost:8000/auth-callback', // Must match your Supabase settings
+        redirectTo: 'http://localhost:${server.port}/auth-callback',
       );
 
       // Wait for the OAuth callback request.
@@ -199,8 +223,9 @@ class _LoginScreenState extends State<LoginScreen> {
         _errorMessage = 'Authentication failed: $e';
         _isBusy = false;
       });
+    } finally {
+      await server.close(force: true);
     }
-    await server.close(force: true);
   }
 
   @override

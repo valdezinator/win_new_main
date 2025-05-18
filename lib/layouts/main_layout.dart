@@ -6,6 +6,7 @@ import '../sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/queue_list.dart';
+import '../widgets/lyrics_panel.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -34,6 +35,34 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  // Lyrics overlay state
+  bool _showLyrics = false;
+  String? _lyrics;
+  Duration _lyricsCurrentPosition = Duration.zero;
+  Duration _lyricsTotalDuration = Duration.zero;
+  Color _lyricsAccentColor = Colors.green;
+
+  void openLyricsPanel({
+    required String? lyrics,
+    required Duration currentPosition,
+    required Duration totalDuration,
+    required Color accentColor,
+  }) {
+    setState(() {
+      _showLyrics = true;
+      _lyrics = lyrics;
+      _lyricsCurrentPosition = currentPosition;
+      _lyricsTotalDuration = totalDuration;
+      _lyricsAccentColor = accentColor;
+    });
+  }
+
+  void closeLyricsPanel() {
+    setState(() {
+      _showLyrics = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,6 +148,17 @@ class _MainLayoutState extends State<MainLayout> {
                 song: widget.currentSong!,
                 onQueueToggle: widget.onQueueToggle,
                 showQueue: widget.showQueue,
+                onShowLyrics: ({
+                  required Duration currentPosition,
+                  required Duration totalDuration,
+                  required Color accentColor,
+                  String? lyrics,
+                }) => openLyricsPanel(
+                  lyrics: lyrics,
+                  currentPosition: currentPosition,
+                  totalDuration: totalDuration,
+                  accentColor: accentColor,
+                ),
               ),
             ),
 
@@ -132,6 +172,67 @@ class _MainLayoutState extends State<MainLayout> {
                 currentSong: widget.currentSong!,
                 onClose: () => widget.onQueueToggle(false),
                 onSongSelected: widget.onSongSelected,
+              ),
+            ),
+
+          // Lyrics overlay (top-level)
+          if (_showLyrics)
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 80, // Height of the MusicPlayer
+              width: 340,
+              child: IgnorePointer(
+                ignoring: !_showLyrics,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _showLyrics ? 1.0 : 0.0,
+                  child: Material(
+                    elevation: 16,
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.transparent,
+                    child: Container(
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF181A1F),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: LyricsPanel(
+                              lyrics: _lyrics,
+                              onClose: closeLyricsPanel,
+                              currentPosition: _lyricsCurrentPosition,
+                              totalDuration: _lyricsTotalDuration,
+                              accentColor: _lyricsAccentColor,
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
+                              onPressed: closeLyricsPanel,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
         ],

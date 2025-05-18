@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
+import 'dart:async';
 
-class LyricsPanel extends StatelessWidget {
+class LyricsPanel extends StatefulWidget {
   final String? lyrics;
   final VoidCallback onClose;
   final Duration currentPosition;
@@ -19,98 +20,190 @@ class LyricsPanel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Add detailed logging for lyrics panel
-    debugPrint('LyricsPanel build called');
-    debugPrint('Lyrics data received: ${lyrics != null ? 'Yes' : 'No'}');
-    if (lyrics != null) {
-      debugPrint('Lyrics length: ${lyrics!.length}');
-      debugPrint('Lyrics preview: ${lyrics!.substring(0, lyrics!.length > 50 ? 50 : lyrics!.length)}...');
-    } else {
-      debugPrint('Lyrics is null');
-    }    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.3, // 30% of screen width
-        height: MediaQuery.of(context).size.height * 0.7, // 70% of screen height
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            children: [
-              // Backdrop blur effect
-              BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  color: const Color(0xFF121212).withOpacity(0.9),
-                ),
-              ),
+  State<LyricsPanel> createState() => _LyricsPanelState();
+}
 
-              // Content
-              Column(
-                children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Lyrics',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close, color: Colors.white.withOpacity(0.8)),
-                          onPressed: onClose,
-                          splashRadius: 20,
-                        ),
-                      ],
-                    ),
-                  ),
+class _LyricsPanelState extends State<LyricsPanel> {
+  late List<_LrcLine> _lrcLines;
+  int _currentLine = 0;
+  final ScrollController _scrollController = ScrollController();
+  bool _isLrc = false;
+  Timer? _timer;
 
-                  // Divider
-                  Divider(
-                    color: Colors.white.withOpacity(0.1),
-                    height: 1,
-                  ),
+  @override
+  void initState() {
+    super.initState();
+    _parseLyrics();
+    _startRealtimeUpdate();
+  }
 
-                  // Lyrics content
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16.0),
-                      child: lyrics != null
-                        ? Text(
-                            lyrics!,
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 14,
-                              height: 1.5,
-                              letterSpacing: 0.3,
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              'No lyrics available',
-                              style: GoogleFonts.inter(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _startRealtimeUpdate() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (mounted && _isLrc) {
+        _updateCurrentLine();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(LyricsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lyrics != widget.lyrics) {
+      _parseLyrics();
+    }
+  }
+
+  void _parseLyrics() {
+    _lrcLines = [];
+    _isLrc = false;
+    final lrc = widget.lyrics;
+    if (lrc == null || lrc.trim().isEmpty) return;
+    final lrcRegex = RegExp(r'^\[\d{2}:\d{2}\.\d{2,3}\]', multiLine: true);
+    if (!lrcRegex.hasMatch(lrc)) return;
+    _isLrc = true;
+    final lineRegex = RegExp(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)');
+    for (final line in lrc.split('\n')) {
+      final match = lineRegex.firstMatch(line);
+      if (match != null) {
+        final min = int.parse(match.group(1)!);
+        final sec = int.parse(match.group(2)!);
+        final ms = int.parse(match.group(3)!.padRight(3, '0'));
+        final text = match.group(4)!.trim();
+        final timestamp = Duration(minutes: min, seconds: sec, milliseconds: ms);
+        _lrcLines.add(_LrcLine(timestamp, text));
+      }
+    }
+    _lrcLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  }
+
+  void _updateCurrentLine() {
+    if (!_isLrc || _lrcLines.isEmpty) return;
+    final pos = widget.currentPosition;
+    int idx = 0;
+    for (int i = 0; i < _lrcLines.length; i++) {
+      if (pos >= _lrcLines[i].timestamp) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    if (_currentLine != idx) {
+      setState(() {
+        _currentLine = idx;
+      });
+      // Animate scroll to keep current line centered
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentLine();
+      });
+    }
+  }
+
+  void _scrollToCurrentLine() {
+    if (!_scrollController.hasClients) return;
+    final lineHeight = 36.0;
+    final offset = (_currentLine * lineHeight) - 120;
+    _scrollController.animateTo(
+      offset < 0 ? 0 : offset,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+          child: Text(
+            'Lyrics',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Divider(
+          color: Colors.white.withOpacity(0.1),
+          height: 1,
+        ),
+        Expanded(
+          child: _isLrc && _lrcLines.isNotEmpty
+              ? ListView.builder(
+                  controller: _scrollController,
+                  itemCount: _lrcLines.length,
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  itemBuilder: (context, idx) {
+                    final isActive = idx == _currentLine;
+                    return AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      style: GoogleFonts.inter(
+                        color: isActive
+                            ? widget.accentColor
+                            : Colors.white.withOpacity(0.7),
+                        fontSize: isActive ? 18 : 15,
+                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                        height: 1.6,
+                        letterSpacing: 0.2,
+                        shadows: isActive
+                            ? [
+                                Shadow(
+                                  color: widget.accentColor.withOpacity(0.3),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Container(
+                        alignment: Alignment.centerLeft,
+                        height: 36,
+                        margin: const EdgeInsets.only(left: 24.0),
+                        child: Text(_lrcLines[idx].text),
+                      ),
+                    );
+                  },
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                  child: widget.lyrics != null && widget.lyrics!.trim().isNotEmpty
+                      ? Text(
+                          widget.lyrics!,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                            height: 1.5,
+                            letterSpacing: 0.3,
+                          ),
+                        )
+                      : Center(
+                          child: Text(
+                            'No lyrics available',
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LrcLine {
+  final Duration timestamp;
+  final String text;
+  _LrcLine(this.timestamp, this.text);
 }
