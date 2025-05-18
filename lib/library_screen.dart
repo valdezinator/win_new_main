@@ -5,6 +5,7 @@ import 'services/playlist_generator_service.dart';
 import 'dart:io'; // Import for File
 import 'package:file_picker/file_picker.dart'; // Import file_picker
 import 'dart:ui'; // Import for BackdropFilter
+import 'package:shimmer/shimmer.dart';
 
 class LibraryScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -22,32 +23,46 @@ class LibraryScreen extends StatefulWidget {
     State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProviderStateMixin {
   bool _isGridView = true;
   String? _currentUserId;
   File? _playlistCoverImage; // Variable to hold the selected image
   Map<String, dynamic>? _selectedPlaylist; // Variable to hold the selected playlist for deletion
   bool _isMenuVisible = false; // Track visibility of the context menu
 
+  // Add animation controller for view transitions
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
   @override
   void initState() {
     super.initState();
     _getCurrentUser();
-  }  Future<void> _getCurrentUser() async {
-    //print("Checking current user session...");
+
+    // Initialize animation controller
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _getCurrentUser() async {
     // First check for current session
     final session = Supabase.instance.client.auth.currentSession;
-    //print("Session: $session");
     final user = session?.user;
-    //print("User from session: $user");
 
     if (user != null) {
-      //print("Setting current user ID to: ${user.id}");
       setState(() {
         _currentUserId = user.id;
       });
     } else {
-      //print("No user session found");
       // If no session, show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,32 +76,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
   Future<List<Map<String, dynamic>>> _fetchPlaylists() async {
     try {
-      //print("Fetching playlists for user: $_currentUserId");
       if (_currentUserId == null) {
-        //print("No current user ID, returning empty list");
         return [];
       }
 
-      //print("Making Supabase query...");
       final data = await widget.supabaseClient
           .from('playlist')  // Changed back to 'playlist' as shown in policies
           .select('id, playlist_name, image_url, user_id, description, created_at')
           .eq('user_id', _currentUserId!)
           .order('created_at', ascending: false);
 
-      //print("Supabase response data: $data");
-
       if (data != null) {
         final playlists = List<Map<String, dynamic>>.from(data);
-        //print("Found ${playlists.length} playlists");
         return playlists;
       }
 
-      //print("No data returned from Supabase");
       return [];
     } catch (e, stackTrace) {
-      //print('Error fetching playlists: $e');
-      //print('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -279,7 +285,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     if (result != null) {
       final selectedFilePath = result.files.single.path!;
-      //print("Selected file path: $selectedFilePath"); // Debug //print
 
       // Check if the file exists
       final file = File(selectedFilePath);
@@ -287,12 +292,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         setState(() {
           _playlistCoverImage = file;
         });
-        //print("Image set successfully: ${file.path}"); // Debug //print
-      } else {
-        //print("File does not exist: $selectedFilePath"); // Debug //print
       }
-    } else {
-      //print("No file selected."); // Debug //print
     }
   }
 
@@ -325,11 +325,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final response = await Supabase.instance.client.storage
         .from('playlist_covers') // Replace with your bucket name
         .upload(fileName, image);
-
-    // Check if there was an error during the upload
-    // if (response.error != null) {
-    //   throw Exception('Error uploading image: ${response.error!.message}');
-    // }
 
     // Get the public URL
     final publicUrl = Supabase.instance.client.storage
@@ -611,22 +606,57 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  Widget _buildGridView(List<Map<String, dynamic>> playlists) {
-    // Calculate responsive grid based on screen width
+  Widget _buildShimmerLoading() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[850]!,
+      highlightColor: Colors.grey[700]!,
+      child: _isGridView
+          ? GridView.builder(
+              padding: const EdgeInsets.all(20),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _calculateCrossAxisCount(),
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+              ),
+              itemCount: 6,
+              itemBuilder: (context, index) => Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 6,
+              itemBuilder: (context, index) => Container(
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                height: 76,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+    );
+  }
+
+  int _calculateCrossAxisCount() {
     final screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount = 2; // Default for very small screens
+    if (screenWidth > 1500) return 6;
+    if (screenWidth > 1200) return 5;
+    if (screenWidth > 900) return 4;
+    if (screenWidth > 600) return 3;
+    return 2;
+  }
 
-    // Responsive grid sizing
-    if (screenWidth > 600) crossAxisCount = 3;
-    if (screenWidth > 900) crossAxisCount = 4;
-    if (screenWidth > 1200) crossAxisCount = 5;
-    if (screenWidth > 1500) crossAxisCount = 6;
-
+  Widget _buildGridView(List<Map<String, dynamic>> playlists) {
     return GridView.builder(
       padding: const EdgeInsets.all(20),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        childAspectRatio: 0.85, // Slightly taller than wide for title space
+        crossAxisCount: _calculateCrossAxisCount(),
+        childAspectRatio: 0.85,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
       ),
@@ -657,9 +687,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onSecondaryTapDown: (details) {
-          // Use globalPosition to get the correct position relative to the screen
           _showContextMenu(context, playlist, details.globalPosition);
-        }, // Show context menu on right-click
+        },
         child: StatefulBuilder(
           builder: (context, setState) {
             bool isHovered = false;
@@ -690,20 +719,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       if (widget.onAlbumSelected != null) {
-                        // Use the callback to navigate to the album view
                         widget.onAlbumSelected!(playlist);
                       } else {
-                        // Fallback to the old navigation method
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => AlbumView(
                               album: playlist,
                               supabaseClient: widget.supabaseClient,
-                              onSongSelected: (song) {
-                                // ...handle song selection...
-                                //print("Song selected: $song");
-                              },
+                              onSongSelected: (song) {},
                               currentlyPlayingSong: widget.currentlyPlayingSong,
                             ),
                           ),
@@ -717,26 +741,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              // Cover image
-                              ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                child: Image.network(
-                                  playlist['image_url'] ?? '',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    color: Colors.grey[800],
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.white54,
-                                      size: 40,
+                              // Cover image with fade transition
+                              Hero(
+                                tag: 'playlist_${playlist['id']}',
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                  child: Image.network(
+                                    playlist['image_url'] ?? '',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                        size: 40,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
 
-                              // Play overlay on hover
+                              // Play overlay with animation
                               if (isHovered)
-                                Positioned.fill(
+                                AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 200),
+                                  opacity: isHovered ? 1.0 : 0.0,
                                   child: Container(
                                     decoration: BoxDecoration(
                                       color: Colors.black.withOpacity(0.5),
@@ -766,9 +795,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   ),
                                 ),
 
-                              // Currently playing indicator
+                              // Currently playing indicator with animation
                               if (isCurrentlyPlaying)
-                                Positioned(
+                                AnimatedPositioned(
+                                  duration: const Duration(milliseconds: 200),
                                   top: 8,
                                   right: 8,
                                   child: Container(
@@ -849,9 +879,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onSecondaryTapDown: (details) {
-          // Use globalPosition to get the correct position relative to the screen
           _showContextMenu(context, playlist, details.globalPosition);
-        }, // Show context menu on right-click
+        },
         child: StatefulBuilder(
           builder: (context, setStateLocal) {
             bool isHovered = false;
@@ -883,20 +912,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       if (widget.onAlbumSelected != null) {
-                        // Use the callback to navigate to the album view
                         widget.onAlbumSelected!(playlist);
                       } else {
-                        // Fallback to the old navigation method
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => AlbumView(
                               album: playlist,
                               supabaseClient: widget.supabaseClient,
-                              onSongSelected: (song) {
-                                // ...handle song selection...
-                                //print("Song selected: $song");
-                              },
+                              onSongSelected: (song) {},
                               currentlyPlayingSong: widget.currentlyPlayingSong,
                             ),
                           ),
@@ -1190,13 +1214,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
 
-            // Playlists content
+            // Playlists content with animations
             Expanded(
               child: FutureBuilder<List<Map<String, dynamic>>>(
                 future: _fetchPlaylists(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return _buildShimmerLoading();
                   }
                   if (snapshot.hasError) {
                     return const Center(
@@ -1240,9 +1264,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     );
                   }
 
-                  return _isGridView
-                      ? _buildGridView(playlists)
-                      : _buildListView(playlists);
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _isGridView
+                        ? _buildGridView(playlists)
+                        : _buildListView(playlists),
+                  );
                 },
               ),
             ),

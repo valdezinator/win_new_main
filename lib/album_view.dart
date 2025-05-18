@@ -7,6 +7,7 @@ import 'dart:io'; // Add this import for InternetAddress
 import 'widgets/queue_list.dart';
 import 'services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
+import 'package:shimmer/shimmer.dart'; // Add shimmer package
 
 class AlbumView extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -30,7 +31,7 @@ class AlbumView extends StatefulWidget {
   State<AlbumView> createState() => _AlbumViewState();
 }
 
-class _AlbumViewState extends State<AlbumView> {
+class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMixin {
   PaletteGenerator? _palette;
   List<Map<String, dynamic>> songs = [];
   bool isLoading = true;
@@ -47,11 +48,22 @@ class _AlbumViewState extends State<AlbumView> {
 
   Timer? _downloadProgressTimer;
 
+  // Add animation controller for transitions
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
   @override
   void initState() {
     super.initState();
-    _currentSong = widget.currentlyPlayingSong; // initialize with parent's value
+    _currentSong = widget.currentlyPlayingSong;
     _loadPalette();
+
+    // Initialize animation controller
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
 
     // Debug: Check authentication state
     final user = widget.supabaseClient.auth.currentUser;
@@ -97,6 +109,17 @@ class _AlbumViewState extends State<AlbumView> {
     });
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    // Cancel the download progress timer
+    _downloadProgressTimer?.cancel();
+
+    // Only clear currentPlayingIndex, don't stop the song
+    currentPlayingIndex = null;
+    super.dispose();
+  }
+
   Future<void> _checkDownloadState() async {
     final isDownloaded = await _downloadService.isAlbumDownloaded(widget.album['id'].toString());
     if (mounted) {
@@ -107,16 +130,7 @@ class _AlbumViewState extends State<AlbumView> {
   }
 
   @override
-  void dispose() {
-    // Cancel the download progress timer
-    _downloadProgressTimer?.cancel();
-
-    // Only clear currentPlayingIndex, don't stop the song
-    currentPlayingIndex = null;
-    super.dispose();
-  }
-
-  Future<void> _loadPalette() async {
+  void _loadPalette() async {
     if (widget.album['image_url'] != null) {
       final imageProvider = NetworkImage(widget.album['image_url']);
       final paletteGenerator = await PaletteGenerator.fromImageProvider(imageProvider);
@@ -512,81 +526,94 @@ class _AlbumViewState extends State<AlbumView> {
   }
 
   Widget _buildAlbumHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 32),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          _buildAlbumCover(),
-          const SizedBox(width: 24),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  widget.album['playlist_name'] ?? widget.album['title'] ?? 'Unknown Album',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28, // Reduced from 36
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.album['artist'] ?? 'Various Artists',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 600;
+        
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            isCompact ? 16 : 32,
+            isCompact ? 16 : 32,
+            isCompact ? 16 : 32,
+            isCompact ? 16 : 32,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildAlbumCover(isCompact),
+              SizedBox(width: isCompact ? 16 : 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _playAll,
-                      icon: const Icon(Icons.play_arrow, color: Colors.black),
-                      label: const Text('Play All', style: TextStyle(color: Colors.black)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
+                    Text(
+                      widget.album['playlist_name'] ?? widget.album['title'] ?? 'Unknown Album',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28, // Reduced from 36
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.album['artist'] ?? 'Various Artists',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 16,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    _buildDownloadButton(),
-                    const SizedBox(width: 16),
-                    _buildAlbumMoreOptionsMenu(),
-                    const Spacer(), // Pushes queue button to the right
-                    IconButton(
-                      icon: const Icon(Icons.queue_music, color: Colors.white),
-                      tooltip: 'Show Queue',
-                      onPressed: () {
-                        setState(() {
-                          showQueue = !showQueue;
-                        });
-                      },
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _playAll,
+                          icon: const Icon(Icons.play_arrow, color: Colors.black),
+                          label: const Text('Play All', style: TextStyle(color: Colors.black)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        _buildDownloadButton(),
+                        const SizedBox(width: 16),
+                        _buildAlbumMoreOptionsMenu(),
+                        const Spacer(), // Pushes queue button to the right
+                        IconButton(
+                          icon: const Icon(Icons.queue_music, color: Colors.white),
+                          tooltip: 'Show Queue',
+                          onPressed: () {
+                            setState(() {
+                              showQueue = !showQueue;
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildAlbumCover() {
+  Widget _buildAlbumCover([bool isCompact = false]) {
+    final size = isCompact ? 120.0 : 200.0;
+    
     return Stack(
       children: [
         Container(
-          width: 200,  // Reduced from 232
-          height: 200, // Reduced from 232
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
@@ -600,14 +627,32 @@ class _AlbumViewState extends State<AlbumView> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: widget.album['image_url'] != null
-              ? CachedNetworkImage(
-                  imageUrl: widget.album['image_url'],
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[900],
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => Container(
+                ? CachedNetworkImage(
+                    imageUrl: widget.album['image_url'],
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[900],
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[800],
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.album, color: Colors.white, size: 50),
+                          SizedBox(height: 8),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Container(
                     color: Colors.grey[800],
                     child: const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -615,7 +660,7 @@ class _AlbumViewState extends State<AlbumView> {
                         Icon(Icons.album, color: Colors.white, size: 50),
                         SizedBox(height: 8),
                         Text(
-                          'Image not available',
+                          'No cover image',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -624,24 +669,6 @@ class _AlbumViewState extends State<AlbumView> {
                       ],
                     ),
                   ),
-                )
-              : Container(
-                  color: Colors.grey[800],
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.album, color: Colors.white, size: 50),
-                      SizedBox(height: 8),
-                      Text(
-                        'No cover image',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
           ),
         ),
         // Show download badge if album is downloaded
@@ -953,21 +980,29 @@ class _AlbumViewState extends State<AlbumView> {
     final isCurrentSong = currentPlayingIndex != null && currentPlayingIndex == entry.key;
     final isHovered = hoveredIndex == entry.key;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       height: 56,
+      decoration: BoxDecoration(
+        color: isCurrentSong
+            ? Colors.green.withOpacity(0.15)
+            : isHovered
+                ? Colors.white.withOpacity(0.1)
+                : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Material(
-        color: isHovered ? Colors.white.withOpacity(0.1) : Colors.transparent,
+        color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            _playSong(entry.value);
-          },
+          onTap: () => _playSong(entry.value),
           onHover: (hover) {
             setState(() {
               hoveredIndex = hover ? entry.key : null;
             });
           },
+          borderRadius: BorderRadius.circular(8),
           child: Row(
             children: [
               // Track Number
@@ -1080,7 +1115,6 @@ class _AlbumViewState extends State<AlbumView> {
   Widget _buildSongList() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      // Add bottom margin to prevent overlap with music player
       margin: EdgeInsets.only(bottom: widget.currentlyPlayingSong != null ? 100 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1138,21 +1172,48 @@ class _AlbumViewState extends State<AlbumView> {
 
           _buildColumnHeaders(),
 
-          // Songs List
-          if (isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (songs.isEmpty)
-            const Center(
-              child: Text(
-                'No songs found in this album',
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
-          else
-            ...songs.asMap().entries.map((entry) {
-              return _buildSongRow(entry);
-            }),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: isLoading
+                ? _buildShimmerLoading()
+                : songs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No songs found in this album',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: songs.length,
+                        itemBuilder: (context, index) {
+                          return _buildSongRow(MapEntry(index, songs[index]));
+                        },
+                      ),
+          ),
         ],
+      ),
+    );
+  }
+
+  // Add shimmer loading widget
+  Widget _buildShimmerLoading() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[850]!,
+      highlightColor: Colors.grey[700]!,
+      child: Column(
+        children: List.generate(
+          8,
+          (index) => Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
       ),
     );
   }
