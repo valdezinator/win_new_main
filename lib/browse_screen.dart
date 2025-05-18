@@ -5,6 +5,8 @@ import 'widgets/queue_list.dart';
 import 'dart:math';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -30,6 +32,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   bool isLoading = true;
   int? currentPlayingIndex;
   bool showQueue = false;
+  Timer? _debounce;
+  int _keyboardSelectedIndex = -1;
+  FocusNode _searchFocusNode = FocusNode();
 
   // Tab controller for the search results tabs
   // late TabController _tabController;
@@ -64,7 +69,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     // Remove _tabController.dispose();
+    _debounce?.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -108,6 +115,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         widget.currentlyPlayingSong?['id'] != oldWidget.currentlyPlayingSong?['id']) {
       _updateCurrentPlayingIndex();
     }
+  }
+
+  void _onSearchChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      searchSongs(value);
+    });
+    setState(() {
+      isSearching = true;
+    });
   }
 
   Future<void> searchSongs(String query) async {
@@ -359,6 +376,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Widget _buildSearchResult(Map<String, dynamic> song, bool isCurrentlyPlaying, {int? index, bool compact = false}) {
     final isHovered = index != null && _hoveredSongIndex == index;
+    final isKeyboardSelected = index != null && _keyboardSelectedIndex == index;
 
     return MouseRegion(
       onEnter: (_) {
@@ -375,7 +393,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       child: Container(
         margin: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
         decoration: BoxDecoration(
-          color: isHovered ? Colors.white.withOpacity(0.1) : Colors.transparent,
+          color: isKeyboardSelected
+              ? Colors.green.withOpacity(0.15)
+              : isHovered
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: ListTile(
@@ -440,25 +462,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ],
             ),
           ),
-          title: Text(
-            song['title'] ?? 'Unknown',
-            style: TextStyle(
-              color: isCurrentlyPlaying ? Colors.green : Colors.white,
-              fontWeight: FontWeight.w500,
-              fontSize: compact ? 14 : 16,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            song['artist'] ?? 'Unknown Artist',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: compact ? 12 : 14,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: _highlightMatch(song['title'] ?? '', _searchController.text),
+          subtitle: _highlightMatch(song['artist'] ?? 'Unknown Artist', _searchController.text),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -523,39 +528,77 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           children: [
             // Search Bar with Chips
             Container(
-              // color: Colors.black.withOpacity(0.3),
               child: Column(
                 children: [
                   // Search Bar
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: GoogleFonts.montserrat(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'What do you want to listen to?',
-                          hintStyle: GoogleFonts.montserrat(
-                          color: Colors.grey[400],
-                          // No direct margin property, so use a Container as prefix
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: SvgPicture.asset(
+                              'assets/icons/browse_icon.svg',
+                              width: 24,
+                              height: 24,
+                            ),
                           ),
-                          prefixIcon: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: SvgPicture.asset(
-                            'assets/icons/browse_icon.svg',
-                            width: 24,
-                            height: 24,
+                          Expanded(
+                            child: RawKeyboardListener(
+                              focusNode: _searchFocusNode,
+                              onKey: (event) {
+                                if (event is RawKeyDownEvent) {
+                                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                                    setState(() {
+                                      _keyboardSelectedIndex = (_keyboardSelectedIndex + 1) % (categorizedResults['Songs']?.length ?? 1);
+                                    });
+                                  } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                                    setState(() {
+                                      _keyboardSelectedIndex = (_keyboardSelectedIndex - 1);
+                                      if (_keyboardSelectedIndex < 0) _keyboardSelectedIndex = (categorizedResults['Songs']?.length ?? 1) - 1;
+                                    });
+                                  } else if (event.logicalKey == LogicalKeyboardKey.enter && _keyboardSelectedIndex >= 0) {
+                                    final songs = categorizedResults['Songs'] ?? [];
+                                    if (_keyboardSelectedIndex < songs.length) {
+                                      _playSearchResult(songs[_keyboardSelectedIndex]);
+                                    }
+                                  }
+                                }
+                              },
+                              child: TextField(
+                                controller: _searchController,
+                                style: GoogleFonts.montserrat(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'What do you want to listen to?',
+                                  hintStyle: GoogleFonts.montserrat(
+                                    color: Colors.grey[400],
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.fromLTRB(0, 15, 16, 12),
+                                ),
+                                onChanged: _onSearchChanged,
+                              ),
+                            ),
                           ),
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.fromLTRB(16, 15, 16, 12), // Increased top padding for hint text
-                        ),
-                        onChanged: (value) => searchSongs(value),
+                          if (isSearching)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 16.0),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -600,11 +643,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
             // Content Area
             Expanded(
-              child: _searchController.text.isEmpty
-                ? _buildBrowseContent()
-                : isSearching
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildSearchResults(),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                child: _searchController.text.isEmpty
+                  ? _buildBrowseContent()
+                  : isSearching
+                    ? _buildShimmerLoader()
+                    : _buildSearchResults(),
+              ),
             ),
           ],
         ),
@@ -761,8 +807,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 130,
+            Container(
+              margin: const EdgeInsets.only(bottom: 32),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: categorizedResults['Artists']!.length,
@@ -1172,5 +1218,42 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _buildShimmerLoader() {
+    // Simple shimmer/skeleton loader for search results
+    return ListView.builder(
+      padding: const EdgeInsets.all(24.0),
+      itemCount: 6,
+      itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _highlightMatch(String text, String query) {
+    if (query.isEmpty) return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final matchIndex = lowerText.indexOf(lowerQuery);
+    if (matchIndex == -1) {
+      return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
+    }
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        children: [
+          TextSpan(text: text.substring(0, matchIndex), style: const TextStyle(color: Colors.white)),
+          TextSpan(text: text.substring(matchIndex, matchIndex + query.length), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          TextSpan(text: text.substring(matchIndex + query.length), style: const TextStyle(color: Colors.white)),
+        ],
+      ),
+    );
   }
 }

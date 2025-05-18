@@ -28,29 +28,17 @@ class _LyricsPanelState extends State<LyricsPanel> {
   int _currentLine = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isLrc = false;
-  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _parseLyrics();
-    _startRealtimeUpdate();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _startRealtimeUpdate() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      if (mounted && _isLrc) {
-        _updateCurrentLine();
-      }
-    });
   }
 
   @override
@@ -58,6 +46,9 @@ class _LyricsPanelState extends State<LyricsPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lyrics != widget.lyrics) {
       _parseLyrics();
+    }
+    if (oldWidget.currentPosition != widget.currentPosition) {
+      _updateCurrentLine();
     }
   }
 
@@ -99,7 +90,6 @@ class _LyricsPanelState extends State<LyricsPanel> {
       setState(() {
         _currentLine = idx;
       });
-      // Animate scroll to keep current line centered
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToCurrentLine();
       });
