@@ -550,10 +550,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                             ),
                           ),
                           Expanded(
-                            child: RawKeyboardListener(
+                            child: KeyboardListener(
                               focusNode: _searchFocusNode,
-                              onKey: (event) {
-                                if (event is RawKeyDownEvent) {
+                              onKeyEvent: (event) {
+                                if (event is KeyDownEvent) {
                                   if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                                     setState(() {
                                       _keyboardSelectedIndex = (_keyboardSelectedIndex + 1) % (categorizedResults['Songs']?.length ?? 1);
