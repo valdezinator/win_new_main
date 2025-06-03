@@ -7,6 +7,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'services/network_service.dart';
+import 'widgets/network_aware_widget.dart' as network;
+import 'package:cached_network_image/cached_network_image.dart';
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -26,6 +29,7 @@ class BrowseScreen extends StatefulWidget {
 
 class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final NetworkService _networkService = NetworkService();
   Map<String, List<Map<String, dynamic>>> categorizedResults = {};
   bool isSearching = false;
   List<Map<String, dynamic>> albums = [];
@@ -77,17 +81,30 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Future<void> _loadAlbums() async {
     try {
-      final response = await widget.supabaseClient
-          .from('albums')
-          .select()
-          .order('created_at');
+      final url = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/albums')
+          .replace(queryParameters: {
+            'order': 'created_at',
+          })
+          .toString();
+
+      final response = await _networkService.getData(
+        url,
+        headers: {
+          'apikey': widget.supabaseClient.auth.currentSession?.accessToken ?? '',
+          'Authorization': 'Bearer ${widget.supabaseClient.auth.currentSession?.accessToken ?? ''}',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        cacheDuration: const Duration(minutes: 15),
+        forceRefresh: false,
+      );
 
       setState(() {
         albums = List<Map<String, dynamic>>.from(response);
         isLoading = false;
       });
     } catch (e) {
-      //print('Error loading albums: $e');
+      print('Error loading albums: $e');
       setState(() {
         isLoading = false;
       });
@@ -139,20 +156,38 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     setState(() => isSearching = true);
 
     try {
-      final songsFuture = widget.supabaseClient
-          .from('songs')
-          .select()
-          .ilike('title', '%$query%');
-      final albumsFuture = widget.supabaseClient
-          .from('albums')
-          .select()
-          .ilike('title', '%$query%');
-      final artistsFuture = widget.supabaseClient
-          .from('artists')
-          .select()
-          .ilike('name', '%$query%');
+      // Construct URLs for each search type
+      final songsUrl = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/songs')
+          .replace(queryParameters: {
+            'title': 'ilike.%$query%',
+          })
+          .toString();
 
-      final results = await Future.wait([songsFuture, albumsFuture, artistsFuture]);
+      final albumsUrl = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/albums')
+          .replace(queryParameters: {
+            'title': 'ilike.%$query%',
+          })
+          .toString();
+
+      final artistsUrl = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/artists')
+          .replace(queryParameters: {
+            'name': 'ilike.%$query%',
+          })
+          .toString();
+
+      final headers = {
+        'apikey': widget.supabaseClient.auth.currentSession?.accessToken ?? '',
+        'Authorization': 'Bearer ${widget.supabaseClient.auth.currentSession?.accessToken ?? ''}',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      };
+
+      // Fetch all data in parallel with caching
+      final results = await Future.wait([
+        _networkService.getData(songsUrl, headers: headers, cacheDuration: const Duration(minutes: 5)),
+        _networkService.getData(albumsUrl, headers: headers, cacheDuration: const Duration(minutes: 5)),
+        _networkService.getData(artistsUrl, headers: headers, cacheDuration: const Duration(minutes: 5)),
+      ]);
 
       final songs = List<Map<String, dynamic>>.from(results[0]).map((song) {
         return {
@@ -171,7 +206,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         isSearching = false;
       });
     } catch (e) {
-      //print('Error searching content: $e');
+      print('Error searching content: $e');
       setState(() => isSearching = false);
     }
   }
@@ -194,11 +229,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: album['image_url'] != null
-                        ? Image.network(
-                            album['image_url'],
+                        ? CachedNetworkImage(
+                            imageUrl: album['image_url'],
                             width: 160,
                             height: 160,
                             fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[850],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 160,
+                              height: 160,
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, size: 60, color: Colors.white),
+                            ),
                           )
                         : Container(
                             width: 160,
@@ -268,9 +313,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               children: [
                 CircleAvatar(
                   radius: 50,
-                  backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
                   backgroundColor: Colors.grey[850],
-                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+                  child: artist['image_url'] != null
+                      ? ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: artist['image_url'],
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[850],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(Icons.person, size: 50, color: Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.person, size: 50, color: Colors.white),
                 ),
                 Positioned.fill(
                   child: Material(
@@ -522,192 +580,247 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
+    return network.NetworkAwareWidget(
+      builder: (context, isOnline) {
+        return Stack(
           children: [
-            // Search Bar with Chips
-            Container(
-              child: Column(
-                children: [
-                  // Search Bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: SvgPicture.asset(
-                              'assets/icons/browse_icon.svg',
-                              width: 24,
-                              height: 24,
-                            ),
+            Column(
+              children: [
+                // Search Bar with Chips
+                Container(
+                  child: Column(
+                    children: [
+                      // Search Bar
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(24),
                           ),
-                          Expanded(
-                            child: KeyboardListener(
-                              focusNode: _searchFocusNode,
-                              onKeyEvent: (event) {
-                                if (event is KeyDownEvent) {
-                                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                                    setState(() {
-                                      _keyboardSelectedIndex = (_keyboardSelectedIndex + 1) % (categorizedResults['Songs']?.length ?? 1);
-                                    });
-                                  } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                                    setState(() {
-                                      _keyboardSelectedIndex = (_keyboardSelectedIndex - 1);
-                                      if (_keyboardSelectedIndex < 0) _keyboardSelectedIndex = (categorizedResults['Songs']?.length ?? 1) - 1;
-                                    });
-                                  } else if (event.logicalKey == LogicalKeyboardKey.enter && _keyboardSelectedIndex >= 0) {
-                                    final songs = categorizedResults['Songs'] ?? [];
-                                    if (_keyboardSelectedIndex < songs.length) {
-                                      _playSearchResult(songs[_keyboardSelectedIndex]);
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: SvgPicture.asset(
+                                  'assets/icons/browse_icon.svg',
+                                  width: 24,
+                                  height: 24,
+                                ),
+                              ),
+                              Expanded(
+                                child: KeyboardListener(
+                                  focusNode: _searchFocusNode,
+                                  onKeyEvent: (event) {
+                                    if (event is KeyDownEvent) {
+                                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                                        setState(() {
+                                          _keyboardSelectedIndex = (_keyboardSelectedIndex + 1) % (categorizedResults['Songs']?.length ?? 1);
+                                        });
+                                      } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                                        setState(() {
+                                          _keyboardSelectedIndex = (_keyboardSelectedIndex - 1);
+                                          if (_keyboardSelectedIndex < 0) _keyboardSelectedIndex = (categorizedResults['Songs']?.length ?? 1) - 1;
+                                        });
+                                      } else if (event.logicalKey == LogicalKeyboardKey.enter && _keyboardSelectedIndex >= 0) {
+                                        final songs = categorizedResults['Songs'] ?? [];
+                                        if (_keyboardSelectedIndex < songs.length) {
+                                          _playSearchResult(songs[_keyboardSelectedIndex]);
+                                        }
+                                      }
                                     }
-                                  }
-                                }
-                              },
-                              child: TextField(
-                                controller: _searchController,
-                                style: GoogleFonts.montserrat(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: 'What do you want to listen to?',
-                                  hintStyle: GoogleFonts.montserrat(
-                                    color: Colors.grey[400],
+                                  },
+                                  child: TextField(
+                                    controller: _searchController,
+                                    style: GoogleFonts.montserrat(color: Colors.white),
+                                    decoration: InputDecoration(
+                                      hintText: 'What do you want to listen to?',
+                                      hintStyle: GoogleFonts.montserrat(
+                                        color: Colors.grey[400],
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.fromLTRB(0, 15, 16, 12),
+                                    ),
+                                    onChanged: _onSearchChanged,
                                   ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.fromLTRB(0, 15, 16, 12),
                                 ),
-                                onChanged: _onSearchChanged,
                               ),
-                            ),
+                              if (isSearching)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 16.0),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                          if (isSearching)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 16.0),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)),
-                                ),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
+                      // Chip Filters
+                      if (_searchController.text.isNotEmpty)
+                        SizedBox(
+                          height: 48,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            itemCount: _filters.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (context, idx) {
+                              final selected = _selectedFilterIndex == idx;
+                              return ChoiceChip(
+                                label: Text(
+                                  _filters[idx],
+                                  style: TextStyle(
+                                    color: selected ? Colors.white : const Color.fromARGB(255, 0, 0, 0),
+                                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                selected: selected,
+                                selectedColor: Colors.green,
+                                backgroundColor: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.08),
+                                onSelected: (val) {
+                                  setState(() {
+                                    _selectedFilterIndex = idx;
+                                  });
+                                },
+                                labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Content Area
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    child: _searchController.text.isEmpty
+                      ? _buildBrowseContent()
+                      : isSearching
+                        ? _buildShimmerLoader()
+                        : _buildSearchResults(),
+                  ),
+                ),
+              ],
+            ),
+
+            // Add gradient overlay for floating player
+            if (widget.currentlyPlayingSong != null) ...[
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 92, // Updated height to match new player + margins
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
                     ),
                   ),
-                  // Chip Filters
-                  if (_searchController.text.isNotEmpty)
-                    SizedBox(
-                      height: 48,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        itemCount: _filters.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, idx) {
-                          final selected = _selectedFilterIndex == idx;
-                          return ChoiceChip(
-                            label: Text(
-                              _filters[idx],
-                              style: TextStyle(
-                                color: selected ? Colors.white : const Color.fromARGB(255, 0, 0, 0),
-                                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                            selected: selected,
-                            selectedColor: Colors.green,
-                            backgroundColor: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.08),
-                            onSelected: (val) {
-                              setState(() {
-                                _selectedFilterIndex = idx;
-                              });
-                            },
-                            labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Content Area
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                child: _searchController.text.isEmpty
-                  ? _buildBrowseContent()
-                  : isSearching
-                    ? _buildShimmerLoader()
-                    : _buildSearchResults(),
-              ),
-            ),
-          ],
-        ),
-
-        // Add gradient overlay for floating player
-        if (widget.currentlyPlayingSong != null) ...[
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 92, // Updated height to match new player + margins
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
                 ),
               ),
-            ),
-          ),
-          if (showQueue)
-            Positioned(
-              bottom: 92,
-              left: 0,
-              right: 0,
-              child: QueueList(
-                currentSong: widget.currentlyPlayingSong!,
-                onClose: () => _toggleQueue(false),
+              if (showQueue)
+                Positioned(
+                  bottom: 92,
+                  left: 0,
+                  right: 0,
+                  child: QueueList(
+                    currentSong: widget.currentlyPlayingSong!,
+                    onClose: () => _toggleQueue(false),
+                  ),
+                ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: MusicPlayer(
+                  key: ValueKey('player_${widget.currentlyPlayingSong!['id']}'),
+                  song: widget.currentlyPlayingSong!,
+                  onQueueToggle: _toggleQueue,
+                  showQueue: showQueue,
+                ),
               ),
-            ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: MusicPlayer(
-              key: ValueKey('player_${widget.currentlyPlayingSong!['id']}'),
-              song: widget.currentlyPlayingSong!,
-              onQueueToggle: _toggleQueue,
-              showQueue: showQueue,
-            ),
-          ),
-        ],
-      ],
+            ],
+          ],
+        );
+      },
+      loadingWidget: const network.LoadingWidget(message: 'Loading browse content...'),
+      errorWidget: network.ErrorWidget(
+        message: 'Failed to load browse content',
+        onRetry: () {
+          setState(() {
+            _loadAlbums();
+          });
+        },
+      ),
+      showOfflineBanner: true,
     );
   }
 
   Widget _buildBrowseContent() {
-    // This would be the content shown when no search is active
-    return const Center(
-      child: Text(
-        'Browse content will appear here',
-        style: TextStyle(color: Colors.white, fontSize: 16),
+    return network.NetworkAwareWidget(
+      builder: (context, isOnline) {
+        if (isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (albums.isEmpty) {
+          return const Center(
+            child: Text(
+              'No content available',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Browse categories
+              const Text(
+                'Browse Categories',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // ... rest of the browse content ...
+            ],
+          ),
+        );
+      },
+      loadingWidget: const network.LoadingWidget(message: 'Loading browse content...'),
+      errorWidget: network.ErrorWidget(
+        message: 'Failed to load browse content',
+        onRetry: () {
+          setState(() {
+            _loadAlbums();
+          });
+        },
       ),
+      showOfflineBanner: true,
     );
   }
 
@@ -724,20 +837,34 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
 
-    // Show content based on selected chip
-    switch (_filters[_selectedFilterIndex]) {
-      case 'Songs':
-        return _buildSongsTab();
-      case 'Artists':
-        return _buildArtistsTab();
-      case 'Albums':
-        return _buildAlbumsTab();
-      case 'Playlists':
-        return _buildPlaylistsTab();
-      case 'All':
-      default:
-        return _buildAllResultsTab();
-    }
+    return network.NetworkAwareWidget(
+      builder: (context, isOnline) {
+        // Show content based on selected chip
+        switch (_filters[_selectedFilterIndex]) {
+          case 'Songs':
+            return _buildSongsTab();
+          case 'Artists':
+            return _buildArtistsTab();
+          case 'Albums':
+            return _buildAlbumsTab();
+          case 'Playlists':
+            return _buildPlaylistsTab();
+          case 'All':
+          default:
+            return _buildAllResultsTab();
+        }
+      },
+      loadingWidget: const network.LoadingWidget(message: 'Loading search results...'),
+      errorWidget: network.ErrorWidget(
+        message: 'Failed to load search results',
+        onRetry: () {
+          if (_searchController.text.isNotEmpty) {
+            searchSongs(_searchController.text);
+          }
+        },
+      ),
+      showOfflineBanner: true,
+    );
   }
 
   Widget _buildAllResultsTab() {
@@ -960,7 +1087,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: song['image_url'] != null
-                      ? Image.network(song['image_url'], width: 100, height: 100, fit: BoxFit.cover)
+                      ? CachedNetworkImage(
+                          imageUrl: song['image_url'],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[850],
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 100,
+                            height: 100,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.music_note, size: 50, color: Colors.white),
+                          ),
+                        )
                       : Container(
                           width: 100,
                           height: 100,
@@ -1062,9 +1204,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 // Artist Image
                 CircleAvatar(
                   radius: 50,
-                  backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
                   backgroundColor: Colors.grey[850],
-                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+                  child: artist['image_url'] != null
+                      ? ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: artist['image_url'],
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[850],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(Icons.person, size: 50, color: Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.person, size: 50, color: Colors.white),
                 ),
                 const SizedBox(width: 24),
                 // Artist Info
@@ -1142,7 +1297,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: album['image_url'] != null
-                      ? Image.network(album['image_url'], width: 100, height: 100, fit: BoxFit.cover)
+                      ? CachedNetworkImage(
+                          imageUrl: album['image_url'],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[850],
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 100,
+                            height: 100,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 50, color: Colors.white),
+                          ),
+                        )
                       : Container(
                           width: 100,
                           height: 100,

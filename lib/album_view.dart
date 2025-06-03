@@ -6,6 +6,8 @@ import 'dart:ui'; // Add this import for ImageFilter
 import 'dart:io'; // Add this import for InternetAddress
 import 'widgets/queue_list.dart';
 import 'services/download_service.dart';
+import 'services/network_service.dart';
+import 'widgets/network_aware_widget.dart' as network;
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 import 'package:shimmer/shimmer.dart'; // Add shimmer package
 
@@ -47,6 +49,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   Map<String, dynamic>? _currentSong; // NEW state variable
 
   Timer? _downloadProgressTimer;
+  final NetworkService _networkService = NetworkService();
 
   // Add animation controller for transitions
   late AnimationController _animationController;
@@ -161,29 +164,16 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
       // First check if the album is downloaded
       final isDownloaded = await _downloadService.isAlbumDownloaded(albumId);
 
-      // Check if we're online
-      bool isOnline = false;
-      try {
-        final result = await InternetAddress.lookup('google.com');
-        isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-      } catch (e) {
-        // We're offline
-        isOnline = false;
-      }
-
       // If album is downloaded and we're offline, load from local storage
-      if (isDownloaded && !isOnline) {
+      if (isDownloaded && !_networkService.isOnline) {
         final albumMetadata = await _downloadService.getAlbumMetadata(albumId);
-
         if (albumMetadata != null && albumMetadata['songs'] != null) {
           final downloadedSongs = List<Map<String, dynamic>>.from(albumMetadata['songs']);
-
           if (mounted) {
             setState(() {
               songs = downloadedSongs;
               isLoading = false;
               _isDownloaded = true;
-
               if (widget.currentlyPlayingSong != null) {
                 currentPlayingIndex = songs.indexWhere(
                   (song) => song['id'] == widget.currentlyPlayingSong!['id']
@@ -196,124 +186,87 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
       }
 
       // If we're offline and the album is not downloaded, show a message
-      if (!isOnline && !isDownloaded) {
+      if (!_networkService.isOnline && !isDownloaded) {
         if (mounted) {
           setState(() {
             isLoading = false;
             songs = [];
           });
-
-          Future.microtask(() {
-            _showErrorMessage(
-              'You\'re offline and this album is not downloaded',
-              isError: true
-            );
-          });
+          _showErrorMessage('You\'re offline and this album is not downloaded', isError: true);
         }
         return;
       }
 
-      // If we're online, proceed with normal loading from Supabase
-      // Check authentication first
+      // Check authentication
       final userId = widget.supabaseClient.auth.currentUser?.id;
+      print('AlbumView - _loadSongs: Current user ID: $userId');
+      final accessToken = widget.supabaseClient.auth.currentSession?.accessToken;
+      print('AlbumView - _loadSongs: Access token is null: ${accessToken == null}');
+
       if (userId == null) {
         setState(() {
           isLoading = false;
           songs = [];
         });
-        // Don't show error message here - will be handled after initState completes
         throw Exception('User not logged in');
       }
 
-      final response = isDynamicPlaylist
-          ? await widget.supabaseClient
-              .from('dynamic_playlist_songs')
-              .select('''
-                songs_2!inner (
-                  id,
-                  title,
-                  artist,
-                  audio_url,
-                  image_url,
-                  duration,
-                  /* song_lyrics commented out */
-                ),
-                dynamic_playlists!inner (
-                  id,
-                  user_id,
-                  playlist_type
-                )
-              ''')
-              .eq('dynamic_playlists.id', widget.album['id'])
-              .eq('dynamic_playlists.user_id', userId)
-          : isPlaylist
-              ? await widget.supabaseClient
-                  .from('playlist_songs')
-                  .select('''
-                    *,
-                    songs_2!inner (
-                      id,
-                      title,
-                      artist,
-                      audio_url,
-                      image_url,
-                      duration,
-                      /* song_lyrics commented out */
-                    )
-                  ''')
-                  .eq('playlist_id', widget.album['id'])
-                  .order('added_at', ascending: false)
-              : await widget.supabaseClient
-                  .from('songs_2')
-                  .select()
-                  .eq('album_id', widget.album['id']);
+      // Use NetworkService to fetch data with caching
+      final endpoint = isDynamicPlaylist ? 'dynamic_playlist_songs' :
+                      isPlaylist ? 'playlist_songs' : 'songs_2';
+      
+      final queryParams = isDynamicPlaylist ? {
+        'dynamic_playlists.id': widget.album['id'],
+        'dynamic_playlists.user_id': userId,
+      } : isPlaylist ? {
+        'playlist_id': widget.album['id'],
+      } : {
+        'album_id': widget.album['id'],
+      };
 
-      // Handle empty response
+      final url = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/$endpoint')
+          .replace(queryParameters: queryParams)
+          .toString();
+
+      print('AlbumView - _loadSongs: Request URL: $url');
+
+      final response = await _networkService.getData(
+        url,
+        headers: {
+          'apikey': widget.supabaseClient.auth.currentSession?.accessToken ?? '',
+          'Authorization': 'Bearer ${widget.supabaseClient.auth.currentSession?.accessToken ?? ''}',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        cacheDuration: const Duration(hours: 1),
+        forceRefresh: false,
+      );
+
+      print('AlbumView - _loadSongs: Full URL: https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/$endpoint');
+
+      // Process response
       if ((response as List).isEmpty) {
         setState(() {
           songs = [];
           isLoading = false;
         });
-
-        // Schedule error message to be shown after initState completes
-        Future.microtask(() {
-          _showErrorMessage(
-            'No songs found in this ${isDynamicPlaylist ? 'playlist' : 'album'}',
-            isError: false
-          );
-        });
+        _showErrorMessage('No songs found in this ${isDynamicPlaylist ? 'playlist' : 'album'}', isError: false);
         return;
       }
 
-      // Process and validate the songs
+      // Process and validate songs
       final validSongs = (response as List)
           .map((song) {
-            Map<String, dynamic>? songData;
-            if (isDynamicPlaylist) {
-                songData = song['songs_2'];
-            } else if (isPlaylist) {
-                songData = song['songs_2'];
-            } else {
-                songData = song;
-            }
+            final songData = isDynamicPlaylist || isPlaylist ? song['songs_2'] : song;
+            if (songData == null || songData['audio_url'] == null) return null;
 
-            if (songData == null || songData['audio_url'] == null) {
-              return null;
-            }
-
-            // Clean and validate the image URL
             String? imageUrl = songData['image_url'] ?? widget.album['image_url'];
             if (imageUrl != null) {
-              // Remove any trailing '?' from the image URL
               imageUrl = imageUrl.endsWith('?') ? imageUrl.substring(0, imageUrl.length - 1) : imageUrl;
-              // Ensure URL is valid
               try {
                 final uri = Uri.parse(imageUrl);
-                if (!uri.hasScheme || !uri.hasAuthority) {
-                  imageUrl = null;
-                }
+                if (!uri.hasScheme || !uri.hasAuthority) imageUrl = null;
               } catch (e) {
-                // Log invalid image URL
                 imageUrl = null;
               }
             }
@@ -325,7 +278,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
               'audio_url': songData['audio_url'],
               'image_url': imageUrl,
               'duration': songData['duration'],
-              'position': song['position'], // For dynamic playlists
+              'position': song['position'],
             };
           })
           .where((song) => song != null)
@@ -336,7 +289,6 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         setState(() {
           songs = validSongs;
           isLoading = false;
-
           if (widget.currentlyPlayingSong != null) {
             currentPlayingIndex = songs.indexWhere(
               (song) => song['id'] == widget.currentlyPlayingSong!['id']
@@ -350,11 +302,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           isLoading = false;
           songs = [];
         });
-
-        // Schedule error message to be shown after initState completes
-        Future.microtask(() {
-          _showErrorMessage('Error loading songs: $e');
-        });
+        _showErrorMessage('Error loading songs: $e');
       }
     }
   }
@@ -1403,68 +1351,80 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final dominantColor = _palette?.dominantColor?.color ?? Colors.black;
-
-    // Content to display in both standalone and main layout modes
-    Widget content = Stack(
+    final content = Stack(
       children: [
-        // Background Gradient
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  dominantColor.withOpacity(0.6),
-                  Colors.black.withOpacity(0.8),
-                  Colors.black,
-                ],
-                stops: const [0.0, 0.3, 0.7],
-              ),
+        // Background gradient
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                _palette?.dominantColor?.color ?? Colors.black,
+                Colors.black,
+              ],
             ),
           ),
         ),
-        // Main Scrollable Content
-        CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              expandedHeight: 300.0, // Adjust as needed
-              automaticallyImplyLeading: false, // Remove default back button
-              flexibleSpace: FlexibleSpaceBar(
-                background: _buildAlbumHeader(),
-              ),
-              leading: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: InkWell(
-                  onTap: () {
-                    if (widget.inMainLayout && widget.onBackPressed != null) {
-                      // Use the callback for in-app navigation
-                      widget.onBackPressed!();
-                    } else {
-                      // Use standard navigation for standalone view
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
+        // Main content
+        network.NetworkAwareWidget(
+          builder: (context, isOnline) {
+            return CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  expandedHeight: 300.0,
+                  automaticallyImplyLeading: false,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: _buildAlbumHeader(),
+                  ),
+                  leading: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: InkWell(
+                      onTap: () {
+                        if (widget.inMainLayout && widget.onBackPressed != null) {
+                          widget.onBackPressed!();
+                        } else {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.arrow_back, color: Colors.white),
+                      ),
                     ),
-                    child: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                 ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildSongList(),
-            ),
-          ],
+                SliverToBoxAdapter(
+                  child: isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildSongList(),
+                ),
+              ],
+            );
+          },
+          loadingWidget: const network.LoadingWidget(message: 'Loading album...'),
+          errorWidget: network.ErrorWidget(
+            message: 'Failed to load album',
+            onRetry: () {
+              setState(() {
+                isLoading = true;
+              });
+              _loadSongs();
+            },
+          ),
+          showOfflineBanner: true,
+          onRetry: () {
+            setState(() {
+              isLoading = true;
+            });
+            _loadSongs();
+          },
         ),
       ],
     );
@@ -1473,41 +1433,13 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
     // Otherwise, wrap it in a Scaffold
     if (widget.inMainLayout) {
       return Material(
-        // Use a transparent color to not affect the background gradient
         color: Colors.transparent,
         child: content,
       );
     } else {
       return Scaffold(
-        body: Stack(
-          children: [
-            content,
-            // Queue List (conditionally shown)
-            if (showQueue && _currentSong != null)
-              Positioned(
-                top: MediaQuery.of(context).padding.top + kToolbarHeight, // Adjust top to be below app bar
-                right: 0,
-                bottom: widget.currentlyPlayingSong != null ? 80.0 : 0, // Space for global player
-                child: QueueList(
-                  currentSong: _currentSong!,
-                  onClose: () => setState(() => showQueue = false),
-                  onSongSelected: (song) {
-                    // When a song is selected from the queue, play it
-                    // and ensure the existing queue context is maintained.
-                    final songWithQueue = {
-                      ...Map<String, dynamic>.from(song),
-                      'queue': _currentSong!['queue'] ?? [], // Preserve the original queue
-                    };
-                    widget.onSongSelected(songWithQueue); // Call the main play function
-                    setState(() {
-                      _currentSong = songWithQueue; // Update local _currentSong
-                      currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
-                    });
-                  },
-                ),
-              ),
-          ],
-        ),
+        backgroundColor: Colors.black,
+        body: content,
       );
     }
   }

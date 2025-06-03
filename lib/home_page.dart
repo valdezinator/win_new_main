@@ -6,6 +6,7 @@ import 'album_view.dart';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'services/dynamic_playlist_service.dart';
+import 'services/network_service.dart';
 import 'library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sign_in.dart';
@@ -17,6 +18,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'profile_screen.dart';
 import 'layouts/content_view.dart';
 import 'widgets/dynamic_playlists_section.dart';
+import 'widgets/network_aware_widget.dart' as network;
 import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 import 'package:palette_generator/palette_generator.dart';
 import 'widgets/home_sections/quick_play_section.dart';
@@ -48,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool showQueue = false;
   final AudioService _audioService = AudioService();
   final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
+  final NetworkService _networkService = NetworkService();
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -164,10 +167,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<List<Map<String, dynamic>>> fetchRecentlyPlayed() async {
     try {
-      final response = await supabaseClient
-          .from('user_play_history')
-          .select('*, songs(*)')
-          .order('played_at', ascending: false);
+      final url = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/user_play_history')
+          .replace(queryParameters: {
+            'select': '*, songs(*)',
+            'order': 'played_at.desc',
+          })
+          .toString();
+
+      final response = await _networkService.getData(
+        url,
+        headers: {
+          'apikey': supabaseClient.auth.currentSession?.accessToken ?? '',
+          'Authorization': 'Bearer ${supabaseClient.auth.currentSession?.accessToken ?? ''}',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        cacheDuration: const Duration(minutes: 5),
+        forceRefresh: false,
+      );
 
       if (response.isEmpty) {
         return [];
@@ -179,49 +196,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return [];
     }
   }
+
   Future<List<Map<String, dynamic>>> fetchTrendingNow() async {
     try {
-      final response = await supabaseClient
-          .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration, play_count') // 'song_lyrics' commented out
-          .order('play_count', ascending: false)
-          .limit(10);
+      final url = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/songs_2')
+          .replace(queryParameters: {
+            'select': 'id, title, artist, audio_url, image_url, duration, play_count',
+            'order': 'play_count.desc',
+            'limit': '10',
+          })
+          .toString();
+
+      final response = await _networkService.getData(
+        url,
+        headers: {
+          'apikey': supabaseClient.auth.currentSession?.accessToken ?? '',
+          'Authorization': 'Bearer ${supabaseClient.auth.currentSession?.accessToken ?? ''}',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        cacheDuration: const Duration(minutes: 15),
+        forceRefresh: false,
+      );
+
       final trendingList = List<Map<String, dynamic>>.from(response);
-      if (trendingList.isEmpty) {  // Fallback using Jamendo API
-        const jamendoUrl =
-            "https://api.jamendo.com/v3.0/tracks/?client_id=Ydc71431e&order=popularity_total&limit=10";
-        final jamendoResponse = await http.get(Uri.parse(jamendoUrl));
-        if (jamendoResponse.statusCode == 200) {
-          final data = jsonDecode(jamendoResponse.body);
+      
+      if (trendingList.isEmpty) {
+        // Fallback using Jamendo API
+        const jamendoUrl = "https://api.jamendo.com/v3.0/tracks/?client_id=Ydc71431e&order=popularity_total&limit=10";
+        final jamendoResponse = await _networkService.getData(
+          jamendoUrl,
+          cacheDuration: const Duration(hours: 1),
+          forceRefresh: false,
+        );
+
+        if (jamendoResponse != null) {
+          final data = jsonDecode(jamendoResponse.toString());
           final tracks = data['results'] as List;
           return tracks.map((track) {
             return {
               'title': track['name'],
-              'audio_url': track['audio'], // sample audio url from Jamendo
+              'audio_url': track['audio'],
               'image_url': track['image'],
             };
           }).toList();
-        } else {
-          //print('Jamendo API error: ${jamendoResponse.statusCode}');
         }
       }
       return trendingList;
     } catch (e) {
-      //print('Error fetching trending songs: $e');
+      print('Error fetching trending songs: $e');
       return [];
     }
   }
 
   Future<List<Map<String, dynamic>>> fetchGenres() async {
     try {
-      final response = await supabaseClient
-          .from('genres')
-          .select()
-          .limit(8);
+      final url = Uri.parse('https://yaysfbsmvtyqpbfhxstj.supabase.co/rest/v1/genres')
+          .replace(queryParameters: {
+            'limit': '8',
+          })
+          .toString();
+
+      final response = await _networkService.getData(
+        url,
+        headers: {
+          'apikey': supabaseClient.auth.currentSession?.accessToken ?? '',
+          'Authorization': 'Bearer ${supabaseClient.auth.currentSession?.accessToken ?? ''}',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        cacheDuration: const Duration(hours: 24),
+        forceRefresh: false,
+      );
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      //print('Error fetching genres: $e');
+      print('Error fetching genres: $e');
       return [];
     }
   }
@@ -354,57 +404,124 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHomeContent() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, _currentSong != null ? 124.0 : 24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Greeting Section
-            Text(
-              'Greetings, $userName',
-              style: GoogleFonts.montserrat(
-                fontSize: 32,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 32),
+    return network.NetworkAwareWidget(
+      builder: (context, isOnline) {
+        return SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, _currentSong != null ? 124.0 : 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Greeting Section
+                Text(
+                  'Greetings, $userName',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w300,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
 
-            // Dynamic Playlists Section
-            DynamicPlaylistsSection(
-              onPlaylistSelected: (playlist) {
-                _navigateToAlbum(playlist);
-              },
-            ),
-            const SizedBox(height: 40),
+                // Dynamic Playlists Section with network awareness
+                network.NetworkAwareWidget(
+                  builder: (context, isOnline) {
+                    return DynamicPlaylistsSection(
+                      onPlaylistSelected: (playlist) {
+                        _navigateToAlbum(playlist);
+                      },
+                    );
+                  },
+                  loadingWidget: const network.LoadingWidget(message: 'Loading playlists...'),
+                  errorWidget: network.ErrorWidget(
+                    message: 'Failed to load playlists',
+                    onRetry: () {
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 40),
 
-            // Quick Play Section
-            QuickPlaySection(
-              onSongSelected: playSong,
-            ),
-            const SizedBox(height: 40),
+                // Quick Play Section with network awareness
+                network.NetworkAwareWidget(
+                  builder: (context, isOnline) {
+                    return QuickPlaySection(
+                      onSongSelected: playSong,
+                    );
+                  },
+                  loadingWidget: const network.LoadingWidget(message: 'Loading quick play...'),
+                  errorWidget: network.ErrorWidget(
+                    message: 'Failed to load quick play',
+                    onRetry: () {
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 40),
 
-            // Just the Hits Section
-            JustTheHitsSection(
-              onAlbumSelected: _navigateToAlbum,
-            ),
-            const SizedBox(height: 40),
+                // Just the Hits Section with network awareness
+                network.NetworkAwareWidget(
+                  builder: (context, isOnline) {
+                    return JustTheHitsSection(
+                      onAlbumSelected: _navigateToAlbum,
+                    );
+                  },
+                  loadingWidget: const network.LoadingWidget(message: 'Loading hits...'),
+                  errorWidget: network.ErrorWidget(
+                    message: 'Failed to load hits',
+                    onRetry: () {
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 40),
 
-            // New Releases Section
-            NewReleasesSection(
-              onAlbumSelected: _navigateToAlbum,
-            ),
-            const SizedBox(height: 40),
+                // New Releases Section with network awareness
+                network.NetworkAwareWidget(
+                  builder: (context, isOnline) {
+                    return NewReleasesSection(
+                      onAlbumSelected: _navigateToAlbum,
+                    );
+                  },
+                  loadingWidget: const network.LoadingWidget(message: 'Loading new releases...'),
+                  errorWidget: network.ErrorWidget(
+                    message: 'Failed to load new releases',
+                    onRetry: () {
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 40),
 
-            // Recommended Artists Section
-            const RecommendedArtistsSection(),
-            const SizedBox(height: 100), // Space for player
-          ],
-        ),
+                // Recommended Artists Section with network awareness
+                network.NetworkAwareWidget(
+                  builder: (context, isOnline) {
+                    return const RecommendedArtistsSection();
+                  },
+                  loadingWidget: const network.LoadingWidget(message: 'Loading recommended artists...'),
+                  errorWidget: network.ErrorWidget(
+                    message: 'Failed to load recommended artists',
+                    onRetry: () {
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: 100), // Space for player
+              ],
+            ),
+          ),
+        );
+      },
+      loadingWidget: const network.LoadingWidget(message: 'Loading home content...'),
+      errorWidget: network.ErrorWidget(
+        message: 'Failed to load home content',
+        onRetry: () {
+          setState(() {});
+        },
       ),
+      showOfflineBanner: true,
     );
   }
 

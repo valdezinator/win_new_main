@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'download_service.dart';
+import 'media_control_service.dart';
 
 class AudioService {
   static final AudioService _instance = AudioService._internal();
@@ -15,6 +16,7 @@ class AudioService {
   final _currentSongController = StreamController<Map<String, dynamic>>.broadcast();
   final _isPlayingController = StreamController<bool>.broadcast();
   final DownloadService _downloadService = DownloadService();
+  final MediaControlService _mediaControlService = MediaControlService();
 
   Map<String, dynamic>? _currentSong;
   List<Map<String, dynamic>> _queue = [];
@@ -35,6 +37,7 @@ class AudioService {
 
   AudioService._internal() {
     _loadLastPlayedSong();
+    _initializeMediaControls();
     // Setup state change handler with auto-play functionality
     player.playerStateStream.listen((state) async {
       if (state.processingState == ProcessingState.completed) {
@@ -52,6 +55,38 @@ class AudioService {
       _isPlaying = false;
       _isPlayingController.add(false);
     });
+
+    // Listen to position changes for media controls
+    player.positionStream.listen((position) {
+      _updateMediaControls();
+    });
+
+    // Listen to duration changes for media controls
+    player.durationStream.listen((duration) {
+      _updateMediaControls();
+    });
+  }
+
+  Future<void> _initializeMediaControls() async {
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      await _mediaControlService.initialize();
+    }
+  }
+
+  void _updateMediaControls() {
+    if (_currentSong == null) return;
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      _mediaControlService.updateMediaControls(
+        title: _currentSong!['title']?.toString() ?? 'Unknown',
+        artist: _currentSong!['artist']?.toString() ?? 'Unknown Artist',
+        album: _currentSong!['album']?.toString() ?? 'Unknown Album',
+        artworkUrl: _currentSong!['image_url']?.toString(),
+        duration: player.duration ?? Duration.zero,
+        position: player.position,
+        isPlaying: _isPlaying,
+      );
+    }
   }
 
   Future<void> _loadLastPlayedSong() async {
@@ -84,6 +119,7 @@ class AudioService {
             await player.setAudioSource(audioSource);
             _isPlaying = false;
             _isPlayingController.add(false);
+            _updateMediaControls();
           } catch (e) {
             // Silently fail if we can't set up the audio source
           }
@@ -117,43 +153,9 @@ class AudioService {
     try {
       // Extract the actual song data if it's nested
       final songData = song['songs_2'] ?? song;
-
-      // Ensure we have all required fields
-      final processedSong = {
-        ...Map<String, dynamic>.from(songData),
-        'id': songData['id'],
-        'title': songData['title'],
-        'audio_url': songData['audio_url'],
-        'artist': songData['artist'],
-        'image_url': songData['image_url'],
-        'duration': songData['duration'],
-        'song_lyrics': songData['song_lyrics'], // Include lyrics from songs_2 table
-        'queue': song['queue'], // Keep the queue from the original song object
-        'downloaded': song['downloaded'] ?? false, // Keep downloaded flag
-        'filename': song['filename'], // Keep filename for downloaded songs
-      };
-
-      // Stop current playback first
-      await player.stop();
-
-      // Update the current song and queue state
-      _currentSong = processedSong;
-      _currentSongController.add(processedSong);
-
-      if (song['queue'] != null) {
-        _queue = List<Map<String, dynamic>>.from(song['queue']);
-        _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
-      }
-
-      // Check if the song is downloaded for offline playback
+      final processedSong = Map<String, dynamic>.from(songData);
       final songId = processedSong['id']?.toString();
-      // First check the downloaded flag, then fall back to checking the file system
-      bool isDownloaded = processedSong['downloaded'] == true;
-      if (!isDownloaded && songId != null) {
-        isDownloaded = await _downloadService.isSongDownloaded(songId);
-      }
-
-      AudioSource? audioSource;
+      final isDownloaded = processedSong['downloaded'] == true;
 
       // Create MediaItem with proper metadata
       final mediaItem = MediaItem(
@@ -168,6 +170,7 @@ class AudioService {
         artUri: processedSong['image_url'] != null ? Uri.parse(processedSong['image_url']) : null,
       );
 
+      AudioSource audioSource;
       if (isDownloaded) {
         // Play from downloaded file
         try {
@@ -191,202 +194,100 @@ class AudioService {
             throw Exception('Temporary file was not created properly');
           }
         } catch (e) {
-          // Error playing downloaded file, try to fall back to streaming
-          // Check if we're online before falling back to streaming
-          try {
-            final result = await InternetAddress.lookup('google.com');
-            if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-              // Fall back to streaming if there's an error with the downloaded file
-              audioSource = AudioSource.uri(
-                Uri.parse(processedSong['audio_url']),
-                tag: mediaItem,
-              );
-            } else {
-              throw Exception('No internet connection and failed to play downloaded file');
-            }
-          } catch (_) {
-            // We're offline and couldn't play the downloaded file
-            throw Exception('Cannot play song: Offline and downloaded file is corrupted');
-          }
+          print('Error playing downloaded file: $e');
+          return;
         }
       } else {
-        // Check if we're online before trying to stream
-        try {
-          final result = await InternetAddress.lookup('google.com');
-          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-            // We're online, play from URL (streaming)
-            audioSource = AudioSource.uri(
-              Uri.parse(processedSong['audio_url']),
-              tag: mediaItem,
-            );
-          } else {
-            throw Exception('Cannot play song: Offline and song is not downloaded');
-          }
-        } catch (e) {
-          throw Exception('Cannot play song: No internet connection and song is not downloaded');
-        }
+        // Play from URL
+        audioSource = AudioSource.uri(
+          Uri.parse(processedSong['audio_url']),
+          tag: mediaItem,
+        );
+      }
+
+      // Update current song and queue
+      _currentSong = processedSong;
+      _currentSongController.add(processedSong);
+
+      if (processedSong['queue'] != null) {
+        _queue = List<Map<String, dynamic>>.from(processedSong['queue']);
+        _currentIndex = _queue.indexWhere((s) => s['id'] == songId);
       }
 
       // Set the audio source and start playing
-      await player.setAudioSource(audioSource, initialPosition: Duration.zero);
-
-      // Start playback
+      await player.setAudioSource(audioSource);
       await player.play();
       _isPlaying = true;
       _isPlayingController.add(true);
+      _updateMediaControls();
 
-      // Save state after successful playback start
+      // Save the last played song
       await _saveLastPlayedSong();
     } catch (e) {
       _isPlaying = false;
       _isPlayingController.add(false);
-      rethrow; // Re-throw to allow caller to handle
     }
   }
 
-  // This method is no longer needed as we use the download service instead
-
-  Future<void> togglePlayPause() async {
-    try {
-      if (_isPlaying) {
-        await player.pause();
-        _isPlaying = false;
-      } else {
-        if (player.audioSource != null && _currentSong != null) {
-          await player.play();
-          _isPlaying = true;
-        } else if (_currentSong != null) {
-          // If no audio source (e.g., after app restart or error), try to play _currentSong
-          await playSong(_currentSong!);
-        }
-      }
-      _isPlayingController.add(_isPlaying);
-      await _saveLastPlayedSong();
-    } catch (e) {
-      // Error in togglePlayPause, continue
-    }
-  }
   Future<void> playNext() async {
-    try {
-      if (_queue.isEmpty) {
-        if (player.playing) await player.stop();
-        _isPlaying = false;
-        _isPlayingController.add(false);
-        return;
-      }
-
-      if (_currentIndex + 1 < _queue.length) {
-        _currentIndex++;
-        final nextSongMap = _queue[_currentIndex];
-
-        // Ensure we preserve all required metadata when constructing the next song
-        Map<String, dynamic> songToPlay = {
-          ...Map<String, dynamic>.from(nextSongMap),
-          'queue': _queue,
-          'album': nextSongMap['album'] ?? _currentSong?['album'],
-          'album_id': nextSongMap['album_id'] ?? _currentSong?['album_id'],
-          'album_art': nextSongMap['album_art'] ?? nextSongMap['image_url'] ?? _currentSong?['album_art'],
-          'artist': nextSongMap['artist'] ?? _currentSong?['artist'] ?? 'Unknown Artist',
-          'duration': nextSongMap['duration'],
-          'song_lyrics': nextSongMap['song_lyrics'], // Preserve lyrics data
-        };
-
-        await playSong(songToPlay);
-      } else {
-        if (player.playing) await player.stop();
-        _isPlaying = false;
-        _isPlayingController.add(false);
-        // Keep _currentSong as the last played song, but update its controller
-        if (_currentSong != null) {
-           _currentSong!['queue'] = _queue; // Ensure queue is still attached
-           _currentSongController.add(_currentSong!);
-        }
-      }
-    } catch (e) {
-      _isPlaying = false;
-      _isPlayingController.add(false);
+    if (_queue.isEmpty || _currentIndex >= _queue.length - 1) {
+      return;
     }
+
+    _currentIndex++;
+    await playSong(_queue[_currentIndex]);
   }
 
   Future<void> playPrevious() async {
     if (_queue.isEmpty) {
-        return;
+      return;
     }
 
     // If more than a few seconds into the current song, restart it
     if (player.position > const Duration(seconds: 3) &&
         _currentIndex >= 0 && _currentIndex < _queue.length) {
-        await player.seek(Duration.zero);
-        if (!_isPlaying && player.audioSource != null) {
-            await player.play();
-            _isPlaying = true;
-            _isPlayingController.add(true);
-        }
-        return;
+      await player.seek(Duration.zero);
+      if (!_isPlaying && player.audioSource != null) {
+        await player.play();
+        _isPlaying = true;
+        _isPlayingController.add(true);
+        _updateMediaControls();
+      }
+      return;
     }
 
-    // If at the start of the song or very early, try to go to the actual previous song
+    // Otherwise, go to previous song
     if (_currentIndex > 0) {
       _currentIndex--;
-      final prevSongMap = _queue[_currentIndex];
-      Map<String, dynamic> songToPlay = Map<String, dynamic>.from(prevSongMap);
-      songToPlay['queue'] = _queue; // Pass the current full queue
-      songToPlay['song_lyrics'] = prevSongMap['song_lyrics']; // Preserve lyrics data
-      await playSong(songToPlay);
-    } else {
-      // At the beginning of the queue, replay the first song from the beginning
-      if (_queue.isNotEmpty) {
-        _currentIndex = 0;
-        final firstSongMap = _queue[0];
-        Map<String, dynamic> songToPlay = Map<String, dynamic>.from(firstSongMap);
-        songToPlay['queue'] = _queue;
-        songToPlay['song_lyrics'] = firstSongMap['song_lyrics']; // Preserve lyrics data
-        await playSong(songToPlay);
-        await player.seek(Duration.zero);
-      }
+      await playSong(_queue[_currentIndex]);
     }
   }
 
-  // Play the current audio
-  Future<void> play() async {
-    if (player.playing) return;
+  Future<void> togglePlayPause() async {
+    if (player.audioSource == null) return;
 
-    try {
-      await player.play();
-      _isPlaying = true;
-      _isPlayingController.add(true);
-    } catch (e) {
-      _isPlaying = false;
-      _isPlayingController.add(false);
-    }
-  }
-
-  // Pause the current audio
-  Future<void> pause() async {
-    if (!player.playing) return;
-
-    try {
+    if (_isPlaying) {
       await player.pause();
       _isPlaying = false;
       _isPlayingController.add(false);
-    } catch (e) {
-      // Error pausing audio, continue
+    } else {
+      await player.play();
+      _isPlaying = true;
+      _isPlayingController.add(true);
     }
+    _updateMediaControls();
   }
 
-  // Check if a song is downloaded
-  Future<bool> isSongDownloaded(String songId) async {
-    return await _downloadService.isSongDownloaded(songId);
+  Future<void> seekTo(Duration position) async {
+    await player.seek(position);
+    _updateMediaControls();
   }
 
-  // Get all downloaded albums
-  Future<List<Map<String, dynamic>>> getDownloadedAlbums() async {
-    return await _downloadService.getDownloadedAlbums();
+  Future<void> setVolume(double volume) async {
+    _baseVolume = volume.clamp(0.0, 1.0);
+    await player.setVolume(_baseVolume);
   }
 
-  /// Adjust player volume relative to base volume level
-  /// Used by NoiseDetectionService to increase volume in noisy environments
-  /// @param increment - percentage increase (0.1 = 10% increase)
   void adjustVolume(double increment) {
     if (!_adaptiveVolumeEnabled) return;
     
@@ -397,33 +298,22 @@ class AudioService {
     player.setVolume(newVolume.clamp(0.0, 1.0));
   }
   
-  /// Reset volume to base level
   void resetVolume() {
     player.setVolume(_baseVolume);
   }
-    /// Set crossfade duration for transitions between tracks
-  /// @param milliseconds - duration of crossfade in milliseconds, null to use default
+
   void setCrossfadeDuration(int? milliseconds) {
-    // Store the value to use when playing next songs
     _baseCrossfadeDuration = milliseconds;
-    
-    // In a full implementation, we would configure crossfade between tracks
-    // For now, we just store the value to use when configuring playback
-    // The actual crossfade implementation depends on just_audio capabilities
-    // and would be applied when setting up audio sources
   }
   
-  /// Enable or disable adaptive volume adjustments
   void setAdaptiveVolumeEnabled(bool enabled) {
     _adaptiveVolumeEnabled = enabled;
     
-    // Reset to base volume if disabled
     if (!enabled) {
       resetVolume();
     }
   }
   
-  /// Get current state of adaptive volume feature
   bool get adaptiveVolumeEnabled => _adaptiveVolumeEnabled;
 
   Future<void> dispose() async {
@@ -431,5 +321,36 @@ class AudioService {
     await player.dispose();
     await _currentSongController.close();
     await _isPlayingController.close();
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      await _mediaControlService.dispose();
+    }
+  }
+
+  Future<void> play() async {
+    await player.play();
+    _isPlaying = true;
+    _isPlayingController.add(true);
+    _updateMediaControls();
+  }
+
+  Future<void> pause() async {
+    await player.pause();
+    _isPlaying = false;
+    _isPlayingController.add(false);
+    _updateMediaControls();
+  }
+
+  Future<List<Map<String, dynamic>>> getDownloadedAlbums() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final downloadedAlbumsJson = prefs.getString('downloaded_albums');
+      if (downloadedAlbumsJson == null) {
+        return [];
+      }
+      return List<Map<String, dynamic>>.from(json.decode(downloadedAlbumsJson));
+    } catch (e) {
+      print('Error getting downloaded albums: $e');
+      return [];
+    }
   }
 }
