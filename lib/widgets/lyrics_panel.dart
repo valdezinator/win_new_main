@@ -98,8 +98,12 @@ class _LyricsPanelState extends State<LyricsPanel> {
 
   void _scrollToCurrentLine() {
     if (!_scrollController.hasClients) return;
-    final lineHeight = 36.0;
-    final offset = (_currentLine * lineHeight) - 120;
+    
+    final approximateLineHeight = 40.0; // Base height plus padding
+    final targetOffset = (_currentLine * approximateLineHeight);
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final offset = targetOffset - (viewportHeight / 3); // Center active line in viewport
+    
     _scrollController.animateTo(
       offset < 0 ? 0 : offset,
       duration: const Duration(milliseconds: 400),
@@ -135,31 +139,32 @@ class _LyricsPanelState extends State<LyricsPanel> {
                   padding: const EdgeInsets.symmetric(vertical: 20.0),
                   itemBuilder: (context, idx) {
                     final isActive = idx == _currentLine;
-                    return AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      style: GoogleFonts.inter(
-                        color: isActive
-                            ? widget.accentColor
-                            : Colors.white.withOpacity(0.7),
-                        fontSize: isActive ? 18 : 15,
-                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                        height: 1.6,
-                        letterSpacing: 0.2,
-                        shadows: isActive
-                            ? [
-                                Shadow(
-                                  color: widget.accentColor.withOpacity(0.3),
-                                  blurRadius: 8,
-                                ),
-                              ]
-                            : [],
-                      ),
-                      child: Container(
-                        alignment: Alignment.centerLeft,
-                        height: 36,
-                        margin: const EdgeInsets.only(left: 24.0),
-                        child: Text(_lrcLines[idx].text),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        style: GoogleFonts.inter(
+                          color: isActive
+                              ? widget.accentColor
+                              : Colors.white.withOpacity(0.7),
+                          fontSize: isActive ? 18 : 15,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          height: 1.6,
+                          letterSpacing: 0.2,
+                          shadows: isActive
+                              ? [
+                                  Shadow(
+                                    color: widget.accentColor.withOpacity(0.3),
+                                    blurRadius: 8,
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Text(
+                          _lrcLines[idx].text,
+                          textAlign: TextAlign.left,
+                        ),
                       ),
                     );
                   },

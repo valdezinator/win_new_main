@@ -187,7 +187,18 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     // Listen to position changes
     _audioService.player.positionStream.listen((position) {
       if (mounted) {
-        setState(() => currentPosition = position);
+        setState(() {
+          currentPosition = position;
+        });
+        // Update lyrics panel if it's shown
+        if (widget.onShowLyrics != null && widget.song['song_lyrics'] != null) {
+          widget.onShowLyrics!(
+            accentColor: accentColor,
+            currentPosition: position,
+            totalDuration: totalDuration,
+            lyrics: widget.song['song_lyrics'],
+          );
+        }
       }
     });
 
