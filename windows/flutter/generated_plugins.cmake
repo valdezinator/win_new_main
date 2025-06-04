@@ -6,18 +6,11 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   connectivity_plus
   file_selector_windows
-  firebase_core
-  flutter_secure_storage_windows
   just_audio_windows
-  media_kit_libs_windows_video
-  media_kit_video
   permission_handler_windows
   record_windows
   screen_retriever
-  sentry_flutter
-  system_tray
   url_launcher_windows
-  volume_controller
   window_manager
   window_to_front
 )

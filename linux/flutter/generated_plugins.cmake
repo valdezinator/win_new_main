@@ -4,15 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
-  flutter_secure_storage_linux
+  flutter_secure_storage
   gtk
-  media_kit_video
   record_linux
   screen_retriever
-  sentry_flutter
-  system_tray
   url_launcher_linux
-  volume_controller
   window_manager
   window_to_front
 )
