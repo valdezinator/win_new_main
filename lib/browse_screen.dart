@@ -137,10 +137,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     }
 
     setState(() => isSearching = true);
-
     try {
       final songsFuture = widget.supabaseClient
-          .from('songs')
+          .from('songs_2')
           .select()
           .ilike('title', '%$query%');
       final albumsFuture = widget.supabaseClient

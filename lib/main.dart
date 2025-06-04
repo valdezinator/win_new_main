@@ -4,14 +4,45 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'main_app.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'services/security_service.dart';
+
+// Load environment variables from .env file
+Future<void> loadEnv() async {
+  try {
+    await dotenv.load(fileName: ".env");
+    
+    // Validate required environment variables
+    final supabaseUrl = dotenv.env['SUPABASE_URL'];
+    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+    
+    if (supabaseUrl == null || supabaseAnonKey == null) {
+      throw Exception('Missing required environment variables. Please check your .env file.');
+    }
+    
+    if (!supabaseUrl.startsWith('http')) {
+      throw Exception('Invalid SUPABASE_URL in .env file');
+    }
+  } catch (e) {
+    // In production, you might want to log this to a service like Sentry
+    debugPrint('Error loading environment variables: $e');
+    rethrow; // Re-throw to prevent the app from starting with invalid config
+  }
+}
 
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize SecurityService
+  await SecurityService().initialize();
+  
+  // Load environment variables
+  await loadEnv();
 
   // Initialize window manager for Windows
   if (Platform.isWindows) {
@@ -53,10 +84,10 @@ Future<void> main() async {
     notificationColor: Colors.grey[900],
   );
 
-  // Initialize Supabase using your project's URL and anon key.
+  // Initialize Supabase using environment variables
   await Supabase.initialize(
-    url: 'https://yaysfbsmvtyqpbfhxstj.supabase.co', // Replace with your Supabase URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlheXNmYnNtdnR5cXBiZmh4c3RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI0NDQ3NDgsImV4cCI6MjA0ODAyMDc0OH0.7d_RsoyQ5RN6Whj6flbd5W0CSLiUpJ6HfRFVEnQKsf8', // Replace with your Supabase anon key
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
   runApp(const MyApp());
@@ -66,15 +97,21 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   Future<Map<String, dynamic>> checkLoginState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final accessToken = prefs.getString('access_token');
+    final securityService = SecurityService();
+    final isSessionValid = await securityService.isSessionValid();
 
-    // Get last played song state
-    final lastPlayedSong = prefs.getString('last_played_song');
-    final wasPlaying = prefs.getBool('was_playing') ?? false;
+    if (!isSessionValid) {
+      // Clear invalid session
+      await securityService.clearSession();
+      return {'isLoggedIn': false};
+    }
+
+    // Get last played song state (encrypted)
+    final lastPlayedSong = await securityService.secureRead('last_played_song');
+    final wasPlaying = await securityService.secureRead('was_playing') == 'true';
 
     return {
-      'isLoggedIn': accessToken != null,
+      'isLoggedIn': true,
       'lastPlayedSong': lastPlayedSong != null ? Map<String, dynamic>.from(
         json.decode(lastPlayedSong)
       ) : null,
@@ -124,6 +161,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isBusy = false;
   String _errorMessage = '';
+  final _securityService = SecurityService();
 
   Future<void> _authenticate() async {
     setState(() {
@@ -166,12 +204,21 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      // Declare mutable subscription before assigning
       StreamSubscription? subscription;
-      subscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      subscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
         debugPrint("Auth state changed: ${data.event}");
         if (data.event == AuthChangeEvent.signedIn) {
           subscription?.cancel();
+          
+          // Save session securely
+          final session = data.session;
+          if (session != null) {
+            await _securityService.saveSession(
+              session.accessToken,
+              session.refreshToken ?? ''
+            );
+          }
+
           if (mounted) {
             setState(() {
               _isBusy = false;
