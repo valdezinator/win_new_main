@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,15 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'download_service.dart';
 
+/// Error types for better handling
+enum PlaybackError {
+  networkError,
+  fileCorrupted,
+  audioSourceError,
+  deviceError,
+  unknown
+}
+
 class AudioService {
   static final AudioService _instance = AudioService._internal();
   factory AudioService() => _instance;
@@ -14,6 +24,7 @@ class AudioService {
   final AudioPlayer player = AudioPlayer();
   final _currentSongController = StreamController<Map<String, dynamic>>.broadcast();
   final _isPlayingController = StreamController<bool>.broadcast();
+  final _errorController = StreamController<PlaybackError>.broadcast();
   final DownloadService _downloadService = DownloadService();
 
   Map<String, dynamic>? _currentSong;
@@ -21,104 +32,44 @@ class AudioService {
   int _currentIndex = -1;
   bool _isPlaying = false;
   
-  // For volume and crossfade control
+  // Error handling fields
+  int _consecutiveErrors = 0;
+  Timer? _errorResetTimer;
+  static const int _maxConsecutiveErrors = 3;
+  static const Duration _errorResetDuration = Duration(minutes: 5);
+    // For volume and crossfade control
   double _baseVolume = 0.7;
   int? _baseCrossfadeDuration;
   bool _adaptiveVolumeEnabled = false;
 
+  // Error logging constants
+  static const int _maxTempFileAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+  Timer? _cleanupTimer;
+
   Stream<Map<String, dynamic>> get currentSongStream => _currentSongController.stream;
   Stream<bool> get isPlayingStream => _isPlayingController.stream;
+  Stream<PlaybackError> get errorStream => _errorController.stream;
 
   Map<String, dynamic>? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
   List<Map<String, dynamic>> get queue => _queue;
 
-  AudioService._internal() {
-    _loadLastPlayedSong();
-    // Setup state change handler with auto-play functionality
-    player.playerStateStream.listen((state) async {
-      if (state.processingState == ProcessingState.completed) {
-        if (_currentIndex < _queue.length - 1) {
-          // Don't stop or reset - just move to next song
-          await playNext();
-        } else {
-          _isPlaying = false;
-          _isPlayingController.add(false);
-          await player.stop();
-          await player.seek(Duration.zero);
-        }
-      }
-    }, onError: (Object e, StackTrace stackTrace) {
-      _isPlaying = false;
-      _isPlayingController.add(false);
-    });
-  }
-
-  Future<void> _loadLastPlayedSong() async {
+  Future<bool> _checkInternetConnection() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final songJson = prefs.getString('last_played_song');
-
-      if (songJson != null) {
-        final song = Map<String, dynamic>.from(json.decode(songJson));
-        _currentSong = song;
-        _currentSongController.add(song);
-
-        if (song['queue'] != null) {
-          _queue = List<Map<String, dynamic>>.from(song['queue']);
-          _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
-        }
-
-        // Set up the audio source but don't start playing
-        if (song['audio_url'] != null) {
-          try {
-            final audioSource = AudioSource.uri(
-              Uri.parse(song['audio_url']),
-              tag: MediaItem(
-                id: song['id']?.toString() ?? '',
-                title: song['title']?.toString() ?? 'Unknown',
-                artist: song['artist']?.toString() ?? 'Unknown Artist',
-                artUri: song['image_url'] != null ? Uri.parse(song['image_url']) : null,
-              ),
-            );
-            await player.setAudioSource(audioSource);
-            _isPlaying = false;
-            _isPlayingController.add(false);
-          } catch (e) {
-            // Silently fail if we can't set up the audio source
-          }
-        }
-      }
-    } catch (e) {
-      // Error loading last played song, continue without it
-    }
-  }
-
-  Future<void> _saveLastPlayedSong() async {
-    try {
-      if (_currentSong != null) {
-        final prefs = await SharedPreferences.getInstance();
-        // Ensure the queue in _currentSong is the most up-to-date one from the service's state
-        _currentSong!['queue'] = _queue;
-        await prefs.setString('last_played_song', json.encode(_currentSong));
-        await prefs.setBool('was_playing', _isPlaying);
-      }
-    } catch (e) {
-      // Error saving last played song, continue without it
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
   Future<void> playSong(Map<String, dynamic> song) async {
-    // Allow playing downloaded songs even without audio_url
     if (song['audio_url'] == null && song['downloaded'] != true) {
-      return;
+      throw Exception('Cannot play song: Missing audio URL and not downloaded');
     }
 
     try {
-      // Extract the actual song data if it's nested
       final songData = song['songs_2'] ?? song;
-
-      // Ensure we have all required fields
       final processedSong = {
         ...Map<String, dynamic>.from(songData),
         'id': songData['id'],
@@ -127,16 +78,13 @@ class AudioService {
         'artist': songData['artist'],
         'image_url': songData['image_url'],
         'duration': songData['duration'],
-        'song_lyrics': songData['song_lyrics'], // Include lyrics from songs_2 table
-        'queue': song['queue'], // Keep the queue from the original song object
-        'downloaded': song['downloaded'] ?? false, // Keep downloaded flag
-        'filename': song['filename'], // Keep filename for downloaded songs
+        'song_lyrics': songData['song_lyrics'],
+        'queue': song['queue'],
+        'downloaded': song['downloaded'] ?? false,
+        'filename': song['filename'],
       };
 
-      // Stop current playback first
       await player.stop();
-
-      // Update the current song and queue state
       _currentSong = processedSong;
       _currentSongController.add(processedSong);
 
@@ -145,17 +93,13 @@ class AudioService {
         _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
       }
 
-      // Check if the song is downloaded for offline playback
       final songId = processedSong['id']?.toString();
-      // First check the downloaded flag, then fall back to checking the file system
-      bool isDownloaded = processedSong['downloaded'] == true;
+      var isDownloaded = processedSong['downloaded'] == true;
       if (!isDownloaded && songId != null) {
         isDownloaded = await _downloadService.isSongDownloaded(songId);
       }
 
-      AudioSource? audioSource;
-
-      // Create MediaItem with proper metadata
+      late AudioSource audioSource;
       final mediaItem = MediaItem(
         id: processedSong['id']?.toString() ?? '',
         title: processedSong['title']?.toString() ?? 'Unknown',
@@ -169,82 +113,267 @@ class AudioService {
       );
 
       if (isDownloaded) {
-        // Play from downloaded file
         try {
           final decryptedData = await _downloadService.getDecryptedFile('song_$songId');
-
-          // Create a temporary file to play from
           final tempDir = await getTemporaryDirectory();
-          // Use platform-specific path separator
           final tempFile = File('${tempDir.path}${Platform.pathSeparator}temp_${DateTime.now().millisecondsSinceEpoch}.mp3');
           await tempFile.writeAsBytes(decryptedData);
 
-          // Make sure the file exists before trying to play it
           if (await tempFile.exists()) {
-            // Use a URI with the file scheme for Windows compatibility
-            final fileUri = Uri.file(tempFile.path);
             audioSource = AudioSource.uri(
-              fileUri,
+              Uri.file(tempFile.path),
               tag: mediaItem,
             );
           } else {
-            throw Exception('Temporary file was not created properly');
+            throw Exception('Failed to create temporary file');
           }
         } catch (e) {
-          // Error playing downloaded file, try to fall back to streaming
-          // Check if we're online before falling back to streaming
-          try {
-            final result = await InternetAddress.lookup('google.com');
-            if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-              // Fall back to streaming if there's an error with the downloaded file
-              audioSource = AudioSource.uri(
-                Uri.parse(processedSong['audio_url']),
-                tag: mediaItem,
-              );
-            } else {
-              throw Exception('No internet connection and failed to play downloaded file');
-            }
-          } catch (_) {
-            // We're offline and couldn't play the downloaded file
-            throw Exception('Cannot play song: Offline and downloaded file is corrupted');
-          }
-        }
-      } else {
-        // Check if we're online before trying to stream
-        try {
-          final result = await InternetAddress.lookup('google.com');
-          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-            // We're online, play from URL (streaming)
+          final isOnline = await _checkInternetConnection();
+          if (isOnline) {
             audioSource = AudioSource.uri(
               Uri.parse(processedSong['audio_url']),
               tag: mediaItem,
             );
           } else {
-            throw Exception('Cannot play song: Offline and song is not downloaded');
+            throw Exception('Cannot play song: Offline and downloaded file is corrupted');
           }
-        } catch (e) {
-          throw Exception('Cannot play song: No internet connection and song is not downloaded');
         }
+      } else {
+        final isOnline = await _checkInternetConnection();
+        if (!isOnline) {
+          throw Exception('Cannot play song: No internet connection and not downloaded');
+        }
+        
+        audioSource = AudioSource.uri(
+          Uri.parse(processedSong['audio_url']),
+          tag: mediaItem,
+        );
       }
 
-      // Set the audio source and start playing
       await player.setAudioSource(audioSource, initialPosition: Duration.zero);
-
-      // Start playback
       await player.play();
       _isPlaying = true;
       _isPlayingController.add(true);
-
-      // Save state after successful playback start
       await _saveLastPlayedSong();
     } catch (e) {
       _isPlaying = false;
       _isPlayingController.add(false);
-      rethrow; // Re-throw to allow caller to handle
+      _handlePlaybackError(error: e);
+      rethrow;
     }
   }
 
-  // This method is no longer needed as we use the download service instead
+  Future<void> _saveLastPlayedSong() async {
+    try {
+      if (_currentSong != null) {
+        final prefs = await SharedPreferences.getInstance();
+        _currentSong!['queue'] = _queue;
+        await prefs.setString('last_played_song', json.encode(_currentSong));
+        await prefs.setBool('was_playing', _isPlaying);
+      }
+    } catch (e) {
+      // Silently fail for storage errors
+      debugPrint('Error saving last played song: $e');
+    }
+  }
+
+  Future<void> _loadLastPlayedSong() async {
+    final prefs = await SharedPreferences.getInstance();
+    final songJson = prefs.getString('last_played_song');
+    
+    if (songJson != null) {
+      try {
+        final song = Map<String, dynamic>.from(json.decode(songJson));
+        _currentSong = song;
+        _currentSongController.add(song);
+
+        if (song['queue'] != null) {
+          _queue = List<Map<String, dynamic>>.from(song['queue']);
+          _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
+        }
+
+        if (song['audio_url'] != null) {
+          final audioSource = AudioSource.uri(
+            Uri.parse(song['audio_url']),
+            tag: MediaItem(
+              id: song['id']?.toString() ?? '',
+              title: song['title']?.toString() ?? 'Unknown',
+              artist: song['artist']?.toString() ?? 'Unknown Artist',
+              artUri: song['image_url'] != null ? Uri.parse(song['image_url']) : null,
+            ),
+          );
+          await player.setAudioSource(audioSource);
+          _isPlaying = false;
+          _isPlayingController.add(false);
+        }
+      } catch (e) {
+        // Error loading last played song
+        _handlePlaybackError(error: e);
+      }
+    }
+  }
+  void _handlePlaybackError({Object? error}) {
+    _consecutiveErrors++;
+    
+    // Reset error count after duration
+    _errorResetTimer?.cancel();
+    _errorResetTimer = Timer(_errorResetDuration, () {
+      _consecutiveErrors = 0;
+      // Clean up temp files periodically when resetting error count
+      _cleanupTempFiles();
+    });
+
+    // Determine error type
+    final PlaybackError errorType;
+    if (error != null) {
+      if (error.toString().contains('network') || 
+         error.toString().contains('connection')) {
+        errorType = PlaybackError.networkError;
+      } else if (error.toString().contains('corrupted') || 
+                error.toString().contains('invalid file')) {
+        errorType = PlaybackError.fileCorrupted;
+      } else if (error.toString().contains('audio source')) {
+        errorType = PlaybackError.audioSourceError;
+      } else if (error.toString().contains('device') || 
+                error.toString().contains('hardware')) {
+        errorType = PlaybackError.deviceError;
+      } else {
+        errorType = PlaybackError.unknown;
+      }
+    } else {
+      errorType = PlaybackError.unknown;
+    }
+
+    // Notify listeners
+    _errorController.add(errorType);
+
+    // Log the error for analytics
+    _logError(errorType, error);
+
+    // Attempt recovery if we haven't had too many consecutive errors
+    if (_consecutiveErrors < _maxConsecutiveErrors) {
+      _attemptErrorRecovery(errorType);
+    }
+  }
+
+  void _logError(PlaybackError errorType, Object? error, {Map<String, dynamic>? extraData}) {
+    // Production error logging
+    final errorDetails = {
+      'type': errorType.toString(),
+      'message': error?.toString(),
+      'songId': _currentSong?['id'],
+      'isDownloaded': _currentSong?['downloaded'],
+      'consecutiveErrors': _consecutiveErrors,
+      'timestamp': DateTime.now().toIso8601String(),
+      ...?extraData,
+    };
+    
+    // Log to console in debug, in production this should go to a logging service
+    debugPrint('Audio Error: ${json.encode(errorDetails)}');
+    
+    // TODO: Send to analytics service
+    // analyticsService.logError('audio_playback_error', errorDetails);
+  }
+
+  Future<void> _cleanupTempFiles() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final files = tempDir.listSync();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      for (var file in files) {
+        if (file is File && file.path.contains('temp_') && file.path.endsWith('.mp3')) {
+          final fileName = file.path.split(Platform.pathSeparator).last;
+          final timestamp = int.tryParse(fileName.split('_')[1].split('.')[0]);
+          if (timestamp != null && (now - timestamp) > _maxTempFileAge) {
+            await file.delete();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cleaning up temp files: $e');
+    }
+  }
+
+  Future<void> _attemptErrorRecovery(PlaybackError errorType) async {
+    if (_currentSong == null) return;
+
+    switch (errorType) {
+      case PlaybackError.networkError:
+        // Try offline playback if available
+        final songId = _currentSong!['id'].toString();
+        if (await _downloadService.isSongDownloaded(songId)) {
+          await _retrySongPlayback(true);
+        }
+        break;
+        
+      case PlaybackError.fileCorrupted:
+        // Try streaming if offline file is corrupted
+        if (_currentSong!['audio_url'] != null) {
+          await _retrySongPlayback(false);
+        }
+        break;
+        
+      case PlaybackError.audioSourceError:
+        // Try recreating audio source
+        await player.stop();
+        await Future.delayed(const Duration(seconds: 1));
+        await _retrySongPlayback(_currentSong!['downloaded'] == true);
+        break;
+        
+      default:
+        // For unknown errors, try simple replay after delay
+        await Future.delayed(const Duration(seconds: 2));
+        await _retrySongPlayback(_currentSong!['downloaded'] == true);
+        break;
+    }
+  }
+
+  Future<void> _retrySongPlayback(bool useDownloaded) async {
+    if (_currentSong != null) {
+      try {
+        Map<String, dynamic> retryData = Map<String, dynamic>.from(_currentSong!);
+        retryData['downloaded'] = useDownloaded;
+        await playSong(retryData);
+      } catch (e) {
+        // If retry fails, just notify via error stream
+        _errorController.add(PlaybackError.unknown);
+      }
+    }
+  }
+
+  void _setupErrorHandling() {
+    player.playerStateStream.listen((state) async {
+      if (state.processingState == ProcessingState.completed) {
+        if (_currentIndex < _queue.length - 1) {
+          await playNext();
+        } else {
+          _isPlaying = false;
+          _isPlayingController.add(false);
+          await player.stop();
+          await player.seek(Duration.zero);
+        }
+      }
+    }, onError: (Object e, StackTrace stackTrace) {
+      _isPlaying = false;
+      _isPlayingController.add(false);
+      _handlePlaybackError(error: e);
+    });
+  }
+
+  AudioService._internal() {
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      await _loadLastPlayedSong();
+      _setupErrorHandling();
+      _cleanupTempFiles(); // Clean up old temp files on init
+    } catch (e) {
+      _handlePlaybackError(error: e);
+    }
+  }
 
   Future<void> togglePlayPause() async {
     try {
@@ -252,98 +381,17 @@ class AudioService {
         await player.pause();
         _isPlaying = false;
       } else {
-        if (player.audioSource != null && _currentSong != null) {
+        if (player.audioSource != null) {
           await player.play();
           _isPlaying = true;
         } else if (_currentSong != null) {
-          // If no audio source (e.g., after app restart or error), try to play _currentSong
           await playSong(_currentSong!);
         }
       }
       _isPlayingController.add(_isPlaying);
       await _saveLastPlayedSong();
     } catch (e) {
-      // Error in togglePlayPause, continue
-    }
-  }
-  Future<void> playNext() async {
-    try {
-      if (_queue.isEmpty) {
-        if (player.playing) await player.stop();
-        _isPlaying = false;
-        _isPlayingController.add(false);
-        return;
-      }
-
-      if (_currentIndex + 1 < _queue.length) {
-        _currentIndex++;
-        final nextSongMap = _queue[_currentIndex];
-
-        // Ensure we preserve all required metadata when constructing the next song
-        Map<String, dynamic> songToPlay = {
-          ...Map<String, dynamic>.from(nextSongMap),
-          'queue': _queue,
-          'album': nextSongMap['album'] ?? _currentSong?['album'],
-          'album_id': nextSongMap['album_id'] ?? _currentSong?['album_id'],
-          'album_art': nextSongMap['album_art'] ?? nextSongMap['image_url'] ?? _currentSong?['album_art'],
-          'artist': nextSongMap['artist'] ?? _currentSong?['artist'] ?? 'Unknown Artist',
-          'duration': nextSongMap['duration'],
-          'song_lyrics': nextSongMap['song_lyrics'], // Preserve lyrics data
-        };
-
-        await playSong(songToPlay);
-      } else {
-        if (player.playing) await player.stop();
-        _isPlaying = false;
-        _isPlayingController.add(false);
-        // Keep _currentSong as the last played song, but update its controller
-        if (_currentSong != null) {
-           _currentSong!['queue'] = _queue; // Ensure queue is still attached
-           _currentSongController.add(_currentSong!);
-        }
-      }
-    } catch (e) {
-      _isPlaying = false;
-      _isPlayingController.add(false);
-    }
-  }
-
-  Future<void> playPrevious() async {
-    if (_queue.isEmpty) {
-        return;
-    }
-
-    // If more than a few seconds into the current song, restart it
-    if (player.position > const Duration(seconds: 3) &&
-        _currentIndex >= 0 && _currentIndex < _queue.length) {
-        await player.seek(Duration.zero);
-        if (!_isPlaying && player.audioSource != null) {
-            await player.play();
-            _isPlaying = true;
-            _isPlayingController.add(true);
-        }
-        return;
-    }
-
-    // If at the start of the song or very early, try to go to the actual previous song
-    if (_currentIndex > 0) {
-      _currentIndex--;
-      final prevSongMap = _queue[_currentIndex];
-      Map<String, dynamic> songToPlay = Map<String, dynamic>.from(prevSongMap);
-      songToPlay['queue'] = _queue; // Pass the current full queue
-      songToPlay['song_lyrics'] = prevSongMap['song_lyrics']; // Preserve lyrics data
-      await playSong(songToPlay);
-    } else {
-      // At the beginning of the queue, replay the first song from the beginning
-      if (_queue.isNotEmpty) {
-        _currentIndex = 0;
-        final firstSongMap = _queue[0];
-        Map<String, dynamic> songToPlay = Map<String, dynamic>.from(firstSongMap);
-        songToPlay['queue'] = _queue;
-        songToPlay['song_lyrics'] = firstSongMap['song_lyrics']; // Preserve lyrics data
-        await playSong(songToPlay);
-        await player.seek(Duration.zero);
-      }
+      _handlePlaybackError(error: e);
     }
   }
 
@@ -356,8 +404,7 @@ class AudioService {
       _isPlaying = true;
       _isPlayingController.add(true);
     } catch (e) {
-      _isPlaying = false;
-      _isPlayingController.add(false);
+      _handlePlaybackError(error: e);
     }
   }
 
@@ -370,10 +417,10 @@ class AudioService {
       _isPlaying = false;
       _isPlayingController.add(false);
     } catch (e) {
-      // Error pausing audio, continue
+      _handlePlaybackError(error: e);
     }
   }
-
+  
   // Check if a song is downloaded
   Future<bool> isSongDownloaded(String songId) async {
     return await _downloadService.isSongDownloaded(songId);
@@ -384,52 +431,85 @@ class AudioService {
     return await _downloadService.getDownloadedAlbums();
   }
 
-  /// Adjust player volume relative to base volume level
-  /// Used by NoiseDetectionService to increase volume in noisy environments
-  /// @param increment - percentage increase (0.1 = 10% increase)
-  void adjustVolume(double increment) {
-    if (!_adaptiveVolumeEnabled) return;
-    
-    final currentVolume = player.volume;
-    final newVolume = currentVolume + increment;
-    
-    // Cap volume at 1.0
-    player.setVolume(newVolume.clamp(0.0, 1.0));
-  }
-  
-  /// Reset volume to base level
-  void resetVolume() {
-    player.setVolume(_baseVolume);
-  }
-    /// Set crossfade duration for transitions between tracks
+  /// Set crossfade duration for transitions between tracks
   /// @param milliseconds - duration of crossfade in milliseconds, null to use default
   void setCrossfadeDuration(int? milliseconds) {
-    // Store the value to use when playing next songs
     _baseCrossfadeDuration = milliseconds;
-    
-    // In a full implementation, we would configure crossfade between tracks
-    // For now, we just store the value to use when configuring playback
     // The actual crossfade implementation depends on just_audio capabilities
     // and would be applied when setting up audio sources
   }
+
+  void adjustVolume(double increment) {
+    if (!_adaptiveVolumeEnabled) return;
+    final currentVolume = player.volume;
+    final newVolume = currentVolume + increment;
+    player.setVolume(newVolume.clamp(0.0, 1.0));
+  }
   
-  /// Enable or disable adaptive volume adjustments
+  void resetVolume() {
+    player.setVolume(_baseVolume);
+  }
+
   void setAdaptiveVolumeEnabled(bool enabled) {
     _adaptiveVolumeEnabled = enabled;
-    
-    // Reset to base volume if disabled
     if (!enabled) {
       resetVolume();
     }
   }
-  
-  /// Get current state of adaptive volume feature
+
   bool get adaptiveVolumeEnabled => _adaptiveVolumeEnabled;
 
   Future<void> dispose() async {
+    _errorResetTimer?.cancel();
+    await _errorController.close();
     await _saveLastPlayedSong();
     await player.dispose();
     await _currentSongController.close();
     await _isPlayingController.close();
+  }
+
+  Future<void> playNext() async {
+    try {
+      if (_queue.isEmpty || _currentIndex >= _queue.length - 1) {
+        if (player.playing) await player.stop();
+        _isPlaying = false;
+        _isPlayingController.add(false);
+        return;
+      }
+
+      _currentIndex++;
+      final nextSongMap = _queue[_currentIndex];
+      final songToPlay = {
+        ...Map<String, dynamic>.from(nextSongMap),
+        'queue': _queue,
+      };
+
+      await playSong(songToPlay);
+    } catch (e) {
+      _handlePlaybackError(error: e);
+    }
+  }
+
+  Future<void> playPrevious() async {
+    try {
+      if (player.position > const Duration(seconds: 3)) {
+        await player.seek(Duration.zero);
+        return;
+      }
+
+      if (_currentIndex > 0) {
+        _currentIndex--;
+        final prevSongMap = _queue[_currentIndex];
+        final songToPlay = {
+          ...Map<String, dynamic>.from(prevSongMap),
+          'queue': _queue,
+        };
+        await playSong(songToPlay);
+      } else {
+        await player.seek(Duration.zero);
+      }
+    } catch (e) {
+      _handlePlaybackError(error: e);
+    }
   }
 }
