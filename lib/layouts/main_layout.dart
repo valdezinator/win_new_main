@@ -34,16 +34,16 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
-  // Lyrics overlay state
+class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
   bool _showLyrics = false;
   String? _lyrics;
+  String? _translatedLyrics;
   Duration _lyricsCurrentPosition = Duration.zero;
   Duration _lyricsTotalDuration = Duration.zero;
   Color _lyricsAccentColor = Colors.green;
-
   void openLyricsPanel({
     required String? lyrics,
+    String? translatedLyrics,
     required Duration currentPosition,
     required Duration totalDuration,
     required Color accentColor,
@@ -51,6 +51,7 @@ class _MainLayoutState extends State<MainLayout> {
     setState(() {
       _showLyrics = true;
       _lyrics = lyrics;
+      _translatedLyrics = translatedLyrics;
       _lyricsCurrentPosition = currentPosition;
       _lyricsTotalDuration = totalDuration;
       _lyricsAccentColor = accentColor;
@@ -147,14 +148,15 @@ class _MainLayoutState extends State<MainLayout> {
               child: MusicPlayer(
                 song: widget.currentSong!,
                 onQueueToggle: widget.onQueueToggle,
-                showQueue: widget.showQueue,
-                onShowLyrics: ({
+                showQueue: widget.showQueue,                onShowLyrics: ({
                   required Duration currentPosition,
                   required Duration totalDuration,
                   required Color accentColor,
                   String? lyrics,
+                  String? translatedLyrics,
                 }) => openLyricsPanel(
                   lyrics: lyrics,
+                  translatedLyrics: translatedLyrics,
                   currentPosition: currentPosition,
                   totalDuration: totalDuration,
                   accentColor: accentColor,
@@ -210,10 +212,10 @@ class _MainLayoutState extends State<MainLayout> {
                         ],
                       ),
                       child: Stack(
-                        children: [
-                          Positioned.fill(
+                        children: [                          Positioned.fill(
                             child: LyricsPanel(
                               lyrics: _lyrics,
+                              translatedLyrics: _translatedLyrics,
                               onClose: closeLyricsPanel,
                               currentPosition: _lyricsCurrentPosition,
                               totalDuration: _lyricsTotalDuration,

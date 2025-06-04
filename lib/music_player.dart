@@ -20,7 +20,7 @@ class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
   final Function(bool)? onQueueToggle;
   final bool showQueue;
-  final Function({required Color accentColor, required Duration currentPosition, required Duration totalDuration, String? lyrics})? onShowLyrics;
+  final Function({required Color accentColor, required Duration currentPosition, required Duration totalDuration, String? lyrics, String? translatedLyrics})? onShowLyrics;
 
   const MusicPlayer({
     super.key,
@@ -192,12 +192,12 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         });
         // Update lyrics panel if it's shown
         if (widget.onShowLyrics != null && widget.song['song_lyrics'] != null) {
-          widget.onShowLyrics!(
-            accentColor: accentColor,
-            currentPosition: position,
-            totalDuration: totalDuration,
-            lyrics: widget.song['song_lyrics'],
-          );
+          widget.onShowLyrics!(                  accentColor: accentColor,
+                  currentPosition: position,
+                  totalDuration: totalDuration,
+                  lyrics: widget.song['song_lyrics'],
+                  translatedLyrics: widget.song['lyrics_in_eng'],
+                );
         }
       }
     });
@@ -278,18 +278,18 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       });
     }
   }
-
   Future<void> _fetchLyrics(String songId) async {
     try {
       final response = await Supabase.instance.client
           .from('songs_2')
-          .select('song_lyrics')
+          .select('song_lyrics, lyrics_in_eng')
           .eq('id', songId)
           .single();
       
       if (response != null && mounted) {
         setState(() {
           widget.song['song_lyrics'] = response['song_lyrics'];
+          widget.song['lyrics_in_eng'] = response['lyrics_in_eng'];
         });
       }
     } catch (e) {
@@ -1050,12 +1050,13 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                             ),
                             onPressed: () {
                               if (widget.onShowLyrics != null) {
-                                widget.onShowLyrics!(
-                                  accentColor: accentColor,
-                                  currentPosition: currentPosition,
-                                  totalDuration: totalDuration,
-                                  lyrics: widget.song['song_lyrics'],
-                                );
+                widget.onShowLyrics!(
+                  accentColor: accentColor,
+                  currentPosition: currentPosition,
+                  totalDuration: totalDuration,
+                  lyrics: widget.song['song_lyrics'],
+                  translatedLyrics: widget.song['lyrics_in_eng'],
+                );
                               }
                               if (widget.song['song_lyrics'] == null && widget.song['id'] != null) {
                                 _fetchLyrics(widget.song['id'].toString());

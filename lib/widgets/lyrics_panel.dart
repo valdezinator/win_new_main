@@ -5,6 +5,7 @@ import 'dart:async';
 
 class LyricsPanel extends StatefulWidget {
   final String? lyrics;
+  final String? translatedLyrics;  // Add this line
   final VoidCallback onClose;
   final Duration currentPosition;
   final Duration totalDuration;
@@ -13,6 +14,7 @@ class LyricsPanel extends StatefulWidget {
   const LyricsPanel({
     super.key,
     required this.lyrics,
+    this.translatedLyrics,  // Add this line
     required this.onClose,
     required this.currentPosition,
     required this.totalDuration,
@@ -28,6 +30,7 @@ class _LyricsPanelState extends State<LyricsPanel> {
   int _currentLine = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isLrc = false;
+  bool _showTranslation = false;  // Add this line
 
   @override
   void initState() {
@@ -51,7 +54,6 @@ class _LyricsPanelState extends State<LyricsPanel> {
       _updateCurrentLine();
     }
   }
-
   void _parseLyrics() {
     _lrcLines = [];
     _isLrc = false;
@@ -61,6 +63,9 @@ class _LyricsPanelState extends State<LyricsPanel> {
     if (!lrcRegex.hasMatch(lrc)) return;
     _isLrc = true;
     final lineRegex = RegExp(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)');
+    
+    // Parse the main lyrics
+    final List<_LrcLine> tempLines = [];
     for (final line in lrc.split('\n')) {
       final match = lineRegex.firstMatch(line);
       if (match != null) {
@@ -69,10 +74,20 @@ class _LyricsPanelState extends State<LyricsPanel> {
         final ms = int.parse(match.group(3)!.padRight(3, '0'));
         final text = match.group(4)!.trim();
         final timestamp = Duration(minutes: min, seconds: sec, milliseconds: ms);
-        _lrcLines.add(_LrcLine(timestamp, text));
+        tempLines.add(_LrcLine(timestamp, text));
       }
     }
-    _lrcLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    tempLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    // Parse translated lyrics if available
+    if (widget.translatedLyrics != null && widget.translatedLyrics!.isNotEmpty) {
+      final List<String> translatedLines = widget.translatedLyrics!.split('\n');
+      for (int i = 0; i < tempLines.length && i < translatedLines.length; i++) {
+        tempLines[i].translatedText = translatedLines[i].trim();
+      }
+    }
+    
+    _lrcLines = tempLines;
   }
 
   void _updateCurrentLine() {
@@ -115,16 +130,31 @@ class _LyricsPanelState extends State<LyricsPanel> {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
+      children: [        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-          child: Text(
-            'Lyrics',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Lyrics',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.translate,
+                  color: _showTranslation ? widget.accentColor : Colors.white.withOpacity(0.7),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showTranslation = !_showTranslation;
+                  });
+                },
+              ),
+            ],
           ),
         ),
         Divider(
@@ -138,33 +168,52 @@ class _LyricsPanelState extends State<LyricsPanel> {
                   itemCount: _lrcLines.length,
                   padding: const EdgeInsets.symmetric(vertical: 20.0),
                   itemBuilder: (context, idx) {
-                    final isActive = idx == _currentLine;
-                    return Padding(
+                    final isActive = idx == _currentLine;                    return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                        style: GoogleFonts.inter(
-                          color: isActive
-                              ? widget.accentColor
-                              : Colors.white.withOpacity(0.7),
-                          fontSize: isActive ? 18 : 15,
-                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                          height: 1.6,
-                          letterSpacing: 0.2,
-                          shadows: isActive
-                              ? [
-                                  Shadow(
-                                    color: widget.accentColor.withOpacity(0.3),
-                                    blurRadius: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            style: GoogleFonts.inter(                              color: isActive
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.7),
+                              fontSize: isActive ? 18 : 15,
+                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                              height: 1.6,
+                              letterSpacing: 0.2,
+                              shadows: isActive                                  ? [
+                                      Shadow(
+                                        color: widget.accentColor.withOpacity(0.5),
+                                        blurRadius: 8,
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: Text(
+                              _lrcLines[idx].text,
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                          if (_showTranslation && _lrcLines[idx].translatedText != null)
+                            AnimatedOpacity(
+                              duration: const Duration(milliseconds: 300),
+                              opacity: _showTranslation ? 1.0 : 0.0,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  _lrcLines[idx].translatedText!,                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withOpacity(isActive ? 0.8 : 0.5),
+                                    fontSize: isActive ? 14 : 12,
+                                    height: 1.4,
+                                    letterSpacing: 0.1,
                                   ),
-                                ]
-                              : [],
-                        ),
-                        child: Text(
-                          _lrcLines[idx].text,
-                          textAlign: TextAlign.left,
-                        ),
+                                  textAlign: TextAlign.left,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     );
                   },
@@ -200,5 +249,6 @@ class _LyricsPanelState extends State<LyricsPanel> {
 class _LrcLine {
   final Duration timestamp;
   final String text;
-  _LrcLine(this.timestamp, this.text);
+  String? translatedText;
+  _LrcLine(this.timestamp, this.text, [this.translatedText]);
 }
