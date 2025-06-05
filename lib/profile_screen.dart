@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 import 'privacy/privacy_policy_widgets.dart';
 import 'services/noise_detection_service.dart';
 import 'services/route_tracking_service.dart';
+import 'services/payment_service.dart';
+import 'widgets/subscription_manager.dart';
 
 /// SettingsScreen: Comprehensive settings page for the music app
 /// Sections: Account, Playback, Notifications, Appearance, Privacy, About
@@ -40,17 +44,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Account
   String? _username;
+  
+  // Payment service
+  final PaymentService _paymentService = PaymentService();
   String? _email;
 
   // About
-  String _appVersion = '';
-  @override
+  String _appVersion = '';  @override
   void initState() {
     super.initState();
     _loadSettings();
     _fetchUserProfile();
     _getAppVersion();
     _initializeServices();
+    _initPaymentService();
+  }
+  
+  // Initialize payment service
+  Future<void> _initPaymentService() async {
+    await _paymentService.initialize();
+    if (mounted) setState(() {});
+  }
+  
+  // Open Premium Plans webpage in default browser
+  Future<void> _openPremiumPlans() async {
+    // Use a local file path that will be created in the project directory
+    final Uri url = Uri.parse('file://${Platform.isWindows ? '/' : ''}${Directory.current.path}/assets/premium_plans.html');
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open Premium Plans page')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
   
   // Initialize noise detection and route tracking services
@@ -146,8 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           // ------------------- Account Section -------------------
-          _sectionHeader('Account'),
-          ListTile(
+          _sectionHeader('Account'),          ListTile(
             leading: const Icon(Icons.person, color: Colors.white70),
             title: Text(_username ?? '', style: const TextStyle(color: Colors.white)),
             subtitle: Text(_email ?? '', style: const TextStyle(color: Colors.white54)),
@@ -155,6 +188,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: _signOut,
               child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
             ),
+          ),
+          
+          // ------------------- Subscription Section -------------------
+          _sectionHeader('Subscription'),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: SubscriptionManager(),
           ),
           const Divider(color: Colors.white24),
 
