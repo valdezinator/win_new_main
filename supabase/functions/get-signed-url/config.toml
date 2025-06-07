@@ -1,0 +1,7 @@
+[functions.get-signed-url]
+verify_jwt = true
+ 
+[functions.get-signed-url.env]
+B2_APPLICATION_KEY_ID = "005a904aa8f7dcd0000000006"
+B2_APPLICATION_KEY = "K005M4pTuXq3X7MxylB12rABYqY3+Rc"
+B2_BUCKET_NAME = "resonance-bucket-1" 

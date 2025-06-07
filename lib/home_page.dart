@@ -19,6 +19,7 @@ import 'layouts/content_view.dart';
 import 'widgets/dynamic_playlists_section.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 import 'package:palette_generator/palette_generator.dart';
+import 'services/backblaze_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -44,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool showQueue = false;
   final AudioService _audioService = AudioService();
   final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
+  final BackblazeService _backblazeService = BackblazeService();
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -440,27 +442,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void playSong(Map<String, dynamic> song) {
+  void playSong(Map<String, dynamic> song) async {
     try {
-      // Ensure we have all required fields
-      if (song['audio_url'] == null) {
-        return;
-      }
+      // Get the audio URL from Backblaze if needed
+      final audioUrl = await _backblazeService.getAudioUrl(
+        song['audio_url'],
+        song['file_identifier'],
+      );
+      print('Resolved audio URL: $audioUrl'); // Debug log
 
       // Create complete song context with queue
       final songWithContext = {
         ...Map<String, dynamic>.from(song),
         'queue': [], // Initialize empty queue if none exists
-        'image_url': song['image_url'] ?? '', // Ensure image_url exists
+        'audio_url': audioUrl, // Use the resolved audio URL
+        'image_url': song['image_url'] ?? '', // Keep original image_url for now
         'artist': song['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
-        // 'song_lyrics': song['song_lyrics'], // Include lyrics data - commented out
       };
 
-      // Play the song - this will update the UI through the stream listener
+      // Play the song
       _audioService.playSong(songWithContext);
     } catch (e) {
-      // Show error to user
+      print('Error resolving audio URL: $e'); // Debug log
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error playing song: ${e.toString()}')),
@@ -919,7 +923,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         onTap: () => playSong(song),
         child: Container(
           width: 180,
-          height: 250, // Fixed height to prevent overflow
+          height: 250,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(8),
@@ -928,26 +932,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Album Art
+              // Album Art with Backblaze support
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                child: Image.network(
-                  song['image_url'] ?? '',
-                  width: 180,
-                  height: 180,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
+                child: FutureBuilder<String>(
+                  future: _backblazeService.getImageUrl(
+                    song['image_url'],
+                    song['file_identifier'],
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Container(
+                        width: 180,
+                        height: 180,
+                        color: Colors.grey[800],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      return Container(
+                        width: 180,
+                        height: 180,
+                        color: Colors.grey[800],
+                        child: const Center(
+                          child: Icon(Icons.error_outline, color: Colors.white, size: 40),
+                        ),
+                      );
+                    }
+
+                    return CachedNetworkImage(
+                      imageUrl: snapshot.data!,
                       width: 180,
                       height: 180,
-                      color: Colors.grey[800],
-                      child: const Center(
-                        child: Icon(Icons.music_note, color: Colors.white, size: 40),
-                      ),
+                      fit: BoxFit.cover,
+                      errorWidget: (context, error, stackTrace) {
+                        return Container(
+                          width: 180,
+                          height: 180,
+                          color: Colors.grey[800],
+                          child: const Center(
+                            child: Icon(Icons.music_note, color: Colors.white, size: 40),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
-              ),              // Song Info
+              ),
+              // Song Info
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0), // Reduced vertical padding
                 child: Column(
@@ -991,30 +1026,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHitAlbumCard(Map<String, dynamic> album) {
-    // Check if the album is downloaded in multiple ways to ensure we catch all cases
-    final bool isDownloaded = album['downloaded'] == true ||
-                             album['category']?.toString().contains('downloaded') == true;
-
-    // Add downloaded flag to album data if it's downloaded
-    if (isDownloaded && album['downloaded'] != true) {
-      album['downloaded'] = true;
-      print('Marking album ${album['title']} (ID: ${album['id']}) as downloaded');
-    }
-
     return GestureDetector(
       onTap: () {
-        // Use the ContentViewController to navigate to the album view
         _navigateToAlbum(album);
       },
       child: Container(
         width: 200,
-        height: 250, // Fixed height to prevent overflow
+        height: 250,
         margin: const EdgeInsets.only(right: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Album Cover
+            // Album Cover with Backblaze support
             Container(
               width: 200,
               height: 200,
@@ -1033,15 +1057,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   // Album Image
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: album['image_url'] ?? '',
-                      height: 200,
-                      width: 200,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        color: Colors.grey[850],
-                        child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        album['image_url'],
+                        album['file_identifier'],
                       ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.error_outline, color: Colors.white54, size: 48),
+                          );
+                        }
+
+                        return CachedNetworkImage(
+                          imageUrl: snapshot.data!,
+                          height: 200,
+                          width: 200,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   // Play button overlay (visible on hover)
@@ -1069,7 +1117,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   // Show download badge if album is downloaded
-                  if (isDownloaded)
+                  if (album['downloaded'] == true)
                     Positioned(
                       right: 10,
                       bottom: 10,
@@ -1149,8 +1197,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildArtistCircle(Map<String, dynamic> artist) {
     return GestureDetector(
       onTap: () {
-        // Use the ContentViewController to navigate to the artist view
-        // This keeps the main layout consistent (sidebar and player)
         ContentViewController().navigateTo(
           ContentType.artist,
           data: artist,
@@ -1160,7 +1206,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         margin: const EdgeInsets.only(right: 24),
         child: Column(
           children: [
-            // Artist Image with hover effect
+            // Artist Image with Backblaze support
             Container(
               width: 130,
               height: 130,
@@ -1178,19 +1224,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   // Artist Image
                   ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: artist['image_url'] ?? '',
-                      width: 130,
-                      height: 130,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[850],
-                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        artist['image_url'],
+                        artist['file_identifier'],
                       ),
-                      // errorWidget: (context, url, error) => Container(
-                      //   color: Colors.grey[850],
-                      //   child: const Icon(Icons.person, color: Colors.white54, size: 48),
-                      // ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.person, color: Colors.white54, size: 48),
+                          );
+                        }
+
+                        return CachedNetworkImage(
+                          imageUrl: snapshot.data!,
+                          width: 130,
+                          height: 130,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[850],
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.person, color: Colors.white54, size: 48),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   // Hover overlay
@@ -1233,12 +1303,14 @@ class NewReleaseItem extends StatefulWidget {
   final String title;
   final String artist;
   final String imageUrl;
+  final String? fileIdentifier; // Add fileIdentifier parameter
 
   const NewReleaseItem({
     super.key,
     required this.title,
     required this.artist,
     required this.imageUrl,
+    this.fileIdentifier,
   });
 
   @override
@@ -1247,6 +1319,7 @@ class NewReleaseItem extends StatefulWidget {
 
 class _NewReleaseItemState extends State<NewReleaseItem> {
   bool _isHovering = false;
+  final BackblazeService _backblazeService = BackblazeService();
 
   @override
   Widget build(BuildContext context) {
@@ -1257,9 +1330,9 @@ class _NewReleaseItemState extends State<NewReleaseItem> {
         width: 200,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // Use minimum space needed
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Album Cover
+            // Album Cover with Backblaze support
             Container(
               width: 200,
               height: 200,
@@ -1278,15 +1351,39 @@ class _NewReleaseItemState extends State<NewReleaseItem> {
                   // Album Image
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: widget.imageUrl,
-                      height: 200,
-                      width: 200,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        color: Colors.grey[850],
-                        child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        widget.imageUrl,
+                        widget.fileIdentifier,
                       ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                          );
+                        }
+
+                        return CachedNetworkImage(
+                          imageUrl: snapshot.data!,
+                          height: 200,
+                          width: 200,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   // Hover overlay with play button

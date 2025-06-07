@@ -8,6 +8,7 @@ import 'widgets/queue_list.dart';
 import 'services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 import 'package:shimmer/shimmer.dart'; // Add shimmer package
+import 'services/backblaze_service.dart'; // Import BackblazeService
 
 class AlbumView extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -51,6 +52,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   // Add animation controller for transitions
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
+  final BackblazeService _backblazeService = BackblazeService(); // Add BackblazeService instance
 
   @override
   void initState() {
@@ -235,6 +238,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                   artist,
                   audio_url,
                   image_url,
+                  file_identifier,
                   duration,
                   /* song_lyrics commented out */
                 ),
@@ -257,6 +261,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                       artist,
                       audio_url,
                       image_url,
+                      file_identifier,
                       duration,
                       /* song_lyrics commented out */
                     )
@@ -265,7 +270,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                   .order('added_at', ascending: false)
               : await widget.supabaseClient
                   .from('songs_2')
-                  .select()
+                  .select('id, title, artist, audio_url, image_url, file_identifier, duration')
                   .eq('album_id', widget.album['id']);
 
       // Handle empty response
@@ -319,14 +324,15 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             }
 
             return {
-              'id': songData['id'],
-              'title': songData['title'] ?? 'Unknown Title',
-              'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-              'audio_url': songData['audio_url'],
-              'image_url': imageUrl,
-              'duration': songData['duration'],
-              'position': song['position'], // For dynamic playlists
-            };
+            'id': songData['id'],
+            'title': songData['title'] ?? 'Unknown Title',
+            'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+            'audio_url': songData['audio_url'],
+            'image_url': imageUrl,
+            'duration': songData['duration'],
+            'position': song['position'], // For dynamic playlists
+            'file_identifier': songData['file_identifier'], // <-- Ensure this is present
+          };
           })
           .where((song) => song != null)
           .cast<Map<String, dynamic>>()
@@ -366,7 +372,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
     }
   }
 
-  void _playSong(Map<String, dynamic> song) {
+  void _playSong(Map<String, dynamic> song) async {
+    // If the song is downloaded, play as usual
     if (song['audio_url'] == null && !_isDownloaded) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -377,19 +384,21 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
     }
 
     try {
+      // Resolve audio URL using BackblazeService if needed
+      final audioUrl = await _backblazeService.getAudioUrl(
+        song['audio_url'],
+        song['file_identifier'],
+      );
+      print('Resolved audio URL (AlbumView): $audioUrl'); // Debug log
+
       // Format queue data first to ensure all songs have required fields
       final formattedQueue = songs.map((s) {
-        // Ensure we have the base song data
         final songData = s['songs_2'] ?? s;
-
-        // Convert duration to integer if it's a string
         var duration = songData['duration'];
         if (duration is String && duration.contains(':')) {
-          // Convert MM:SS format to seconds
           final parts = duration.split(':');
           duration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
         }
-
         return {
           ...Map<String, dynamic>.from(songData),
           'id': songData['id'],
@@ -400,20 +409,17 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           'album': widget.album['playlist_name'] ?? widget.album['title'],
           'album_id': widget.album['id'],
           'duration': duration,
-          // 'song_lyrics': songData['song_lyrics'], // Include lyrics data - commented out
-          'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
-          'filename': _isDownloaded ? 'song_${songData['id']}' : null, // Add filename for downloaded songs
+          'downloaded': _isDownloaded,
+          'filename': _isDownloaded ? 'song_${songData['id']}' : null,
         };
       }).toList();
 
-      // Add duration handling for the current song
       var songDuration = song['duration'];
       if (songDuration is String && songDuration.contains(':')) {
         final parts = songDuration.split(':');
         songDuration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
       }
 
-      // Create song context with formatted queue
       final songWithAlbumContext = {
         ...Map<String, dynamic>.from(song),
         'id': song['id'],
@@ -424,19 +430,19 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
         'title': song['title'] ?? 'Unknown Title',
         'duration': songDuration,
-        'song_lyrics': song['song_lyrics'], // Include lyrics data
-        'queue': formattedQueue, // Use the formatted queue
-        'downloaded': _isDownloaded, // Add flag to indicate if this is a downloaded song
-        'filename': _isDownloaded ? 'song_${song['id']}' : null, // Add filename for downloaded songs
+        'song_lyrics': song['song_lyrics'],
+        'queue': formattedQueue,
+        'downloaded': _isDownloaded,
+        'filename': _isDownloaded ? 'song_${song['id']}' : null,
+        'audio_url': audioUrl, // Use resolved audio URL
       };
 
-      // Update the current song and index
       _currentSong = songWithAlbumContext;
       currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
 
-      // Call the parent's callback to play the song
       widget.onSongSelected(songWithAlbumContext);
     } catch (e) {
+      print('Error resolving audio URL (AlbumView): $e'); // Debug log
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error playing song: ${e.toString()}')),

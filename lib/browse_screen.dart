@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'services/backblaze_service.dart';
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -35,6 +36,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   Timer? _debounce;
   int _keyboardSelectedIndex = -1;
   FocusNode _searchFocusNode = FocusNode();
+  final BackblazeService _backblazeService = BackblazeService();
 
   // Tab controller for the search results tabs
   // late TabController _tabController;
@@ -307,21 +309,29 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     );
   }
 
-  void _playSearchResult(Map<String, dynamic> song) {
-    if (song['audio_url'] != null) {
-      // Add search context to the song
+  void _playSearchResult(Map<String, dynamic> song) async {
+    try {
+      final audioUrl = await _backblazeService.getAudioUrl(
+        song['audio_url'],
+        song['file_identifier'],
+      );
+      print('Resolved audio URL (BrowseScreen): $audioUrl');
       final songWithSearchContext = {
         ...Map<String, dynamic>.from(song),
         'queue': categorizedResults['Songs'] ?? [],  // Use search results as queue
         'isPlaying': true,
+        'audio_url': audioUrl,
       };
       widget.onSongSelected(songWithSearchContext);
-    } else {
-      //print('Error: No audio URL for song ${song['title']}');
+    } catch (e) {
+      print('Error resolving audio URL (BrowseScreen): $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error playing song: ${e.toString()}')),
+        );
+      }
     }
   }
-
-
 
   void _toggleQueue(bool show) {
     setState(() {
@@ -415,19 +425,47 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    song['image_url'] ?? '',
-                    width: compact ? 40 : 48,
-                    height: compact ? 40 : 48,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[850],
-                      child: Icon(
-                        Icons.music_note,
-                        color: Colors.white,
-                        size: compact ? 20 : 24,
-                      ),
+                  child: FutureBuilder<String>(
+                    future: _backblazeService.getImageUrl(
+                      song['image_url'],
+                      song['file_identifier'],
                     ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Container(
+                          color: Colors.grey[850],
+                          child: Icon(
+                            Icons.music_note,
+                            color: Colors.white,
+                            size: compact ? 20 : 24,
+                          ),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Container(
+                          color: Colors.grey[850],
+                          child: Icon(
+                            Icons.music_note,
+                            color: Colors.white,
+                            size: compact ? 20 : 24,
+                          ),
+                        );
+                      }
+                      return Image.network(
+                        snapshot.data!,
+                        width: compact ? 40 : 48,
+                        height: compact ? 40 : 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey[850],
+                          child: Icon(
+                            Icons.music_note,
+                            color: Colors.white,
+                            size: compact ? 20 : 24,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 if (isCurrentlyPlaying)
