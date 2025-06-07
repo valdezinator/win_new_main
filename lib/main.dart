@@ -10,6 +10,11 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'services/security_service.dart';
+import 'services/ad_manager_service.dart';
+import 'services/audio_service.dart';
+
+// Create a global instance of AudioService
+final AudioService _audioService = AudioService();
 
 // Load environment variables from .env file
 Future<void> loadEnv() async {
@@ -38,6 +43,9 @@ Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Initialize ad Service
+  await AdManagerService().initialize(_audioService.player);
+
   // Initialize SecurityService
   await SecurityService().initialize();
   

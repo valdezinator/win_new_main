@@ -11,9 +11,11 @@ import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'services/noise_detection_service.dart';
 import 'services/route_tracking_service.dart';
+import 'services/ad_manager_service.dart';
 import 'widgets/jam_session_indicator.dart';
 import 'widgets/adaptive_features_indicator.dart';
 import 'widgets/lyrics_panel.dart';
+import 'widgets/ad_controls.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MusicPlayer extends StatefulWidget {
@@ -39,6 +41,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   final JamSessionService _jamSessionService = JamSessionService();
   final NoiseDetectionService _noiseDetectionService = NoiseDetectionService();
   final RouteTrackingService _routeTrackingService = RouteTrackingService();
+  final AdManagerService _adManager = AdManagerService();
   
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
@@ -77,6 +80,10 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
+    
+    // Initialize ad service with the main audio player
+    _adManager.initialize(_audioService.player);
+    _adManager.startAdTimer();
     
     // Monitor adaptive features active state
     _setupAdaptiveFeaturesListeners();
@@ -429,7 +436,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     _animationController.dispose();
     _fullScreenAnimController.dispose();
     _stopJamSessionUpdates(); // Ensure timer is cancelled
-
+    _adManager.dispose(); // Dispose ad manager
     super.dispose();
   }
 
@@ -730,388 +737,423 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       child: Stack(
         children: [
           // Base player UI
-          Focus(
-            focusNode: _focusNode,
-            autofocus: false,
-            onKeyEvent: (node, event) {
-              // Only handle KeyDownEvent to avoid duplicate events
-              if (event is KeyDownEvent) {
-                // Add your key handling logic here
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                height: 80,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                decoration: BoxDecoration(
-                    color: const Color(0xFF080A0D),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.5),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                      offset: const Offset(0, 5),
+          // Listen to ad state to show appropriate UI
+          StreamBuilder<bool>(
+            stream: Stream.periodic(const Duration(milliseconds: 100)).map((_) => _adManager.isAdPlaying),
+            initialData: _adManager.isAdPlaying,
+            builder: (context, snapshot) {
+              final isAdPlaying = snapshot.data ?? false;
+              
+              // Always show the player container to maintain layout, but change content
+              return Focus(
+                focusNode: _focusNode,
+                autofocus: false,
+                onKeyEvent: (node, event) {
+                  // Only handle KeyDownEvent to avoid duplicate events
+                  if (event is KeyDownEvent) {
+                    // Add your key handling logic here
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    height: 80,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF080A0D),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Left section - Song Info
-                    Container(
-                      width: 220,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          // Album art
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Image.network(
-                              widget.song['image_url'] ?? '',
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  color: Colors.grey[800],
-                                  child: const Icon(Icons.music_note, color: Colors.white, size: 24),
-                                ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Song title and artist
-                          Flexible(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
+                    child: isAdPlaying
+                        ? Center( // Show ad UI when ad is playing
+                            child: Stack(
+                                  alignment: Alignment.center,
                               children: [
-                                // Song title
-                                SizedBox(
-                                  height: 20,
-                                  width: 140, // Reduced from 200 to match layout
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final text = widget.song['title'] ?? 'Unknown';
-                                      final textPainter = TextPainter(
-                                        text: TextSpan(
-                                          text: text,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        maxLines: 1,
-                                        textDirection: TextDirection.ltr,
-                                      )..layout(maxWidth: double.infinity);
-
-                                      if (textPainter.width > constraints.maxWidth) {
-                                        return Marquee(
-                                          text: text,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          scrollAxis: Axis.horizontal,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          blankSpace: 20.0,
-                                          velocity: 30.0,
-                                          pauseAfterRound: const Duration(seconds: 1),
-                                          startPadding: 10.0,
-                                          accelerationDuration: const Duration(seconds: 1),
-                                          accelerationCurve: Curves.linear,
-                                          decelerationDuration: const Duration(milliseconds: 500),
-                                          decelerationCurve: Curves.easeOut,
-                                        );
-                                      }
-                                      return Text(
-                                        text,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      );
-                                    },
+                                Text(
+                                  'Advertisement',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-
-                                // Artist name
-                                SizedBox(
-                                  height: 16,
-                                  width: 140, // Reduced from 200 to match layout
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final text = widget.song['artist'] ?? 'Unknown Artist';
-                                      final textPainter = TextPainter(
-                                        text: TextSpan(
-                                          text: text,
-                                          style: TextStyle(
-                                            color: Colors.white.withOpacity(0.7),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                        maxLines: 1,
-                                        textDirection: TextDirection.ltr,
-                                      )..layout(maxWidth: double.infinity);
-
-                                      if (textPainter.width > constraints.maxWidth) {
-                                        return Marquee(
-                                          text: text,
-                                          style: TextStyle(
-                                            color: Colors.white.withOpacity(0.7),
-                                            fontSize: 12,
-                                          ),
-                                          scrollAxis: Axis.horizontal,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          blankSpace: 20.0,
-                                          velocity: 30.0,
-                                          pauseAfterRound: const Duration(seconds: 1),
-                                          startPadding: 10.0,
-                                          accelerationDuration: const Duration(seconds: 1),
-                                          accelerationCurve: Curves.linear,
-                                          decelerationDuration: const Duration(milliseconds: 500),
-                                          decelerationCurve: Curves.easeOut,
-                                        );
-                                      }
-                                      return Text(
-                                        text,
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
-                                          fontSize: 12,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      );
-                                    },
-                                  ),
+                                // Ad controls overlay - positioned on top
+                                Positioned(
+                                  top: 0,
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: AdControls(),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Center section - Playback Controls and Progress Bar
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Progress bar with duration on either side
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center, // Center the entire row
+                          )
+                        : Row( // Show normal player UI when no ad
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Flexible(
-                                child: Container(
-                                  constraints: const BoxConstraints(maxWidth: 400), // Constrain maximum width
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Current position
-                                      Text(
-                                        _formatDuration(currentPosition),
-                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
-                                      ),
-                                      const SizedBox(width: 8),
-
-                                      // Progress slider
-                                      Expanded(
-                                        child: SliderTheme(
-                                          data: SliderThemeData(
-                                            trackHeight: 2,
-                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                                            activeTrackColor: accentColor,
-                                            inactiveTrackColor: Colors.grey[800],
-                                            thumbColor: accentColor,
+                              // Left section - Song Info
+                              Container(
+                                width: 220,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    // Album art
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.network(
+                                        widget.song['image_url'] ?? '',
+                                        width: 56,
+                                        height: 56,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                          Container(
+                                            width: 56,
+                                            height: 56,
+                                            color: Colors.grey[800],
+                                            child: const Icon(Icons.music_note, color: Colors.white, size: 24),
                                           ),
-                                          child: Slider(
-                                            value: currentPosition.inSeconds.toDouble(),
-                                            max: totalDuration.inSeconds.toDouble(),
-                                            onChanged: (value) {
-                                              _audioService.player.seek(Duration(seconds: value.toInt()));
-                                            },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Song title and artist
+                                    Flexible(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          // Song title
+                                          SizedBox(
+                                            height: 20,
+                                            width: 140, // Reduced from 200 to match layout
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                final text = widget.song['title'] ?? 'Unknown';
+                                                final textPainter = TextPainter(
+                                                  text: TextSpan(
+                                                    text: text,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  maxLines: 1,
+                                                  textDirection: TextDirection.ltr,
+                                                )..layout(maxWidth: double.infinity);
+
+                                                if (textPainter.width > constraints.maxWidth) {
+                                                  return Marquee(
+                                                    text: text,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                    scrollAxis: Axis.horizontal,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    blankSpace: 20.0,
+                                                    velocity: 30.0,
+                                                    pauseAfterRound: const Duration(seconds: 1),
+                                                    startPadding: 10.0,
+                                                    accelerationDuration: const Duration(seconds: 1),
+                                                    accelerationCurve: Curves.linear,
+                                                    decelerationDuration: const Duration(milliseconds: 500),
+                                                    decelerationCurve: Curves.easeOut,
+                                                  );
+                                                }
+                                                return Text(
+                                                  text,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                );
+                                              },
+                                            ),
+                                          ),
+
+                                          // Artist name
+                                          SizedBox(
+                                            height: 16,
+                                            width: 140, // Reduced from 200 to match layout
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                final text = widget.song['artist'] ?? 'Unknown Artist';
+                                                final textPainter = TextPainter(
+                                                  text: TextSpan(
+                                                    text: text,
+                                                    style: TextStyle(
+                                                      color: Colors.white.withOpacity(0.7),
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  maxLines: 1,
+                                                  textDirection: TextDirection.ltr,
+                                                )..layout(maxWidth: double.infinity);
+
+                                                if (textPainter.width > constraints.maxWidth) {
+                                                  return Marquee(
+                                                    text: text,
+                                                    style: TextStyle(
+                                                      color: Colors.white.withOpacity(0.7),
+                                                      fontSize: 12,
+                                                    ),
+                                                    scrollAxis: Axis.horizontal,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    blankSpace: 20.0,
+                                                    velocity: 30.0,
+                                                    pauseAfterRound: const Duration(seconds: 1),
+                                                    startPadding: 10.0,
+                                                    accelerationDuration: const Duration(seconds: 1),
+                                                    accelerationCurve: Curves.linear,
+                                                    decelerationDuration: const Duration(milliseconds: 500),
+                                                    decelerationCurve: Curves.easeOut,
+                                                  );
+                                                }
+                                                return Text(
+                                                  text,
+                                                  style: TextStyle(
+                                                    color: Colors.white.withOpacity(0.7),
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Center section - Playback Controls and Progress Bar
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Progress bar with duration on either side
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center, // Center the entire row
+                                      children: [
+                                        Flexible(
+                                          child: Container(
+                                            constraints: const BoxConstraints(maxWidth: 400), // Constrain maximum width
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                // Current position
+                                                Text(
+                                                  _formatDuration(currentPosition),
+                                                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+                                                ),
+                                                const SizedBox(width: 8),
+
+                                                // Progress slider
+                                                Expanded(
+                                                  child: SliderTheme(
+                                                    data: SliderThemeData(
+                                                      trackHeight: 2,
+                                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                                                      activeTrackColor: accentColor,
+                                                      inactiveTrackColor: Colors.grey[800],
+                                                      thumbColor: accentColor,
+                                                    ),
+                                                    child: Slider(
+                                                      value: currentPosition.inSeconds.toDouble(),
+                                                      max: totalDuration.inSeconds.toDouble(),
+                                                      onChanged: (value) {
+                                                        _audioService.player.seek(Duration(seconds: value.toInt()));
+                                                      },
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+
+                                                // Total duration
+                                                Text(
+                                                  _formatDuration(totalDuration),
+                                                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
+                                      ],
+                                    ),
 
-                                      // Total duration
-                                      Text(
-                                        _formatDuration(totalDuration),
-                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+                                    // Playback controls
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // Shuffle button
+                                        _buildHoverButton(
+                                          child: Icon(
+                                            Icons.shuffle,
+                                            color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
+                                            size: 16,
+                                          ),
+                                          onPressed: toggleShuffle,
+                                        ),
+                                        const SizedBox(width: 24),
+
+                                        // Previous button
+                                        _buildHoverButton(
+                                          icon: Icons.skip_previous,
+                                          color: Colors.white,
+                                          onPressed: _handlePrevious,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(width: 16),
+
+                                        // Play/Pause button
+                                        _buildHoverButton(
+                                          icon: isPlaying
+                                            ? Icons.pause_circle_filled
+                                            : Icons.play_circle_filled,
+                                          color: Colors.white,
+                                          onPressed: _handlePlayPause,
+                                          size: 32,
+                                        ),
+                                        const SizedBox(width: 16),
+
+                                        // Next button
+                                        _buildHoverButton(
+                                          icon: Icons.skip_next,
+                                          color: Colors.white,
+                                          onPressed: _handleNext,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(width: 24),
+
+                                        // Repeat button
+                                        _buildHoverButton(
+                                          child: Icon(
+                                            Icons.repeat,
+                                            color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
+                                            size: 16,
+                                          ),
+                                          onPressed: toggleRepeat,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Right section - Additional Controls
+                              Container(
+                                width: 220,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    // Queue button
+                                    _buildHoverButton(
+                                      child: Icon(
+                                        Icons.queue_music,
+                                        color: widget.showQueue ? accentColor : Colors.white.withOpacity(0.7),
+                                        size: 16,
                                       ),
-                                    ],
-                                  ),
+                                      onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Lyrics button
+                                    _buildHoverButton(
+                                      child: Icon(
+                                        Icons.format_quote,
+                                        color: (widget.song['song_lyrics'] != null) ? accentColor : Colors.white.withOpacity(0.7),
+                                        size: 16,
+                                      ),
+                                      onPressed: () {
+                                        if (widget.onShowLyrics != null) {
+                                          widget.onShowLyrics!(
+                                            accentColor: accentColor,
+                                            currentPosition: currentPosition,
+                                            totalDuration: totalDuration,
+                                            lyrics: widget.song['song_lyrics'],
+                                            translatedLyrics: widget.song['lyrics_in_eng'],
+                                          );
+                                        }
+                                        if (widget.song['song_lyrics'] == null && widget.song['id'] != null) {
+                                          _fetchLyrics(widget.song['id'].toString());
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Volume control
+                                    Icon(
+                                      Icons.volume_up,
+                                      color: Colors.white.withOpacity(0.7),
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+
+                                    // Volume slider
+                                    SizedBox(
+                                      width: 60,
+                                      child: SliderTheme(
+                                        data: SliderThemeData(
+                                          trackHeight: 2,
+                                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
+                                          activeTrackColor: Colors.white,
+                                          inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                          thumbColor: Colors.white,
+                                        ),
+                                        child: Slider(
+                                          value: volume,
+                                          onChanged: (value) {
+                                            setState(() => volume = value);
+                                            _audioService.player.setVolume(value);
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Full screen button
+                                    _buildHoverButton(
+                                      child: Icon(
+                                        isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                                        color: isFullScreen ? accentColor : Colors.white.withOpacity(0.7),
+                                        size: 20,
+                                      ),
+                                      onPressed: _toggleFullScreen,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-
-                          // Playback controls
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Shuffle button
-                              _buildHoverButton(
-                                child: Icon(
-                                  Icons.shuffle,
-                                  color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                  size: 16,
-                                ),
-                                onPressed: toggleShuffle,
-                              ),
-                              const SizedBox(width: 24),
-
-                              // Previous button
-                              _buildHoverButton(
-                                icon: Icons.skip_previous,
-                                color: Colors.white,
-                                onPressed: _handlePrevious,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 16),
-
-                              // Play/Pause button
-                              _buildHoverButton(
-                                icon: isPlaying
-                                  ? Icons.pause_circle_filled
-                                  : Icons.play_circle_filled,
-                                color: Colors.white,
-                                onPressed: _handlePlayPause,
-                                size: 32,
-                              ),
-                              const SizedBox(width: 16),
-
-                              // Next button
-                              _buildHoverButton(
-                                icon: Icons.skip_next,
-                                color: Colors.white,
-                                onPressed: _handleNext,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 24),
-
-                              // Repeat button
-                              _buildHoverButton(
-                                child: Icon(
-                                  Icons.repeat,
-                                  color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                  size: 16,
-                                ),
-                                onPressed: toggleRepeat,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Right section - Additional Controls
-                    Container(
-                      width: 220,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          // Queue button
-                          _buildHoverButton(
-                            child: Icon(
-                              Icons.queue_music,
-                              color: widget.showQueue ? accentColor : Colors.white.withOpacity(0.7),
-                              size: 16,
-                            ),
-                            onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
-                          ),
-                          const SizedBox(width: 12),                          // Lyrics button
-                          _buildHoverButton(
-                            child: Icon(
-                              Icons.format_quote,
-                              color: (widget.song['song_lyrics'] != null) ? accentColor : Colors.white.withOpacity(0.7),
-                              size: 16,
-                            ),
-                            onPressed: () {
-                              if (widget.onShowLyrics != null) {
-                widget.onShowLyrics!(
-                  accentColor: accentColor,
-                  currentPosition: currentPosition,
-                  totalDuration: totalDuration,
-                  lyrics: widget.song['song_lyrics'],
-                  translatedLyrics: widget.song['lyrics_in_eng'],
-                );
-                              }
-                              if (widget.song['song_lyrics'] == null && widget.song['id'] != null) {
-                                _fetchLyrics(widget.song['id'].toString());
-                              }
-                            },
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Volume control
-                          Icon(
-                            Icons.volume_up,
-                            color: Colors.white.withOpacity(0.7),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-
-                          // Volume slider
-                          SizedBox(
-                            width: 60,
-                            child: SliderTheme(
-                              data: SliderThemeData(
-                                trackHeight: 2,
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 6),
-                                activeTrackColor: Colors.white,
-                                inactiveTrackColor: Colors.white.withOpacity(0.3),
-                                thumbColor: Colors.white,
-                              ),
-                              child: Slider(
-                                value: volume,
-                                onChanged: (value) {
-                                  setState(() => volume = value);
-                                  _audioService.player.setVolume(value);
-                                },
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Full screen button
-                          _buildHoverButton(
-                            child: Icon(
-                              isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                              color: isFullScreen ? accentColor : Colors.white.withOpacity(0.7),
-                              size: 20,
-                            ),
-                            onPressed: _toggleFullScreen,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
 
           // Full screen music player overlay
