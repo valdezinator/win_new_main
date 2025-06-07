@@ -135,11 +135,20 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   @override
   void _loadPalette() async {
     if (widget.album['image_url'] != null) {
-      final imageProvider = NetworkImage(widget.album['image_url']);
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(imageProvider);
-      setState(() {
-        _palette = paletteGenerator;
-      });
+      try {
+        // Resolve image URL using BackblazeService
+        final resolvedImageUrl = await _backblazeService.getImageUrl(
+          widget.album['image_url'],
+          widget.album['image_identifier'],
+        );
+        final imageProvider = NetworkImage(resolvedImageUrl);
+        final paletteGenerator = await PaletteGenerator.fromImageProvider(imageProvider);
+        setState(() {
+          _palette = paletteGenerator;
+        });
+      } catch (e) {
+        print('Error loading palette: $e');
+      }
     }
   }  // Helper method to show error messages after widget is fully initialized
   void _showErrorMessage(String message, {bool isError = true}) {
@@ -324,15 +333,20 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             }
 
             return {
-            'id': songData['id'],
-            'title': songData['title'] ?? 'Unknown Title',
-            'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-            'audio_url': songData['audio_url'],
-            'image_url': imageUrl,
-            'duration': songData['duration'],
-            'position': song['position'], // For dynamic playlists
-            'file_identifier': songData['file_identifier'], // <-- Ensure this is present
-          };
+              'id': songData['id'],
+              'title': songData['title'] ?? 'Unknown Title',
+              'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+              'audio_url': songData['audio_url'],
+              'image_url': imageUrl,
+              'duration': songData['duration'],
+              'position': song['position'], // For dynamic playlists
+              'file_identifier': songData['file_identifier'],
+              'image_identifier': songData['image_identifier'] != null
+                  ? (songData['image_identifier'].startsWith('images/')
+                      ? songData['image_identifier']
+                      : 'images/${songData['image_identifier']}')
+                  : null,
+            };
           })
           .where((song) => song != null)
           .cast<Map<String, dynamic>>()
@@ -633,30 +647,65 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: widget.album['image_url'] != null
-                ? CachedNetworkImage(
-                    imageUrl: widget.album['image_url'],
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[900],
-                      child: const Center(child: CircularProgressIndicator()),
+                ? FutureBuilder<String>(
+                    future: _backblazeService.getImageUrl(
+                      widget.album['image_url'],
+                      widget.album['image_identifier'],
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[800],
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.album, color: Colors.white, size: 50),
-                          SizedBox(height: 8),
-                          Text(
-                            'Image not available',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Container(
+                          color: Colors.grey[900],
+                          child: const Center(child: CircularProgressIndicator()),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return Container(
+                          color: Colors.grey[800],
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.white54, size: 48),
+                              SizedBox(height: 8),
+                              Text(
+                                'Error loading image',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        );
+                      }
+
+                      return CachedNetworkImage(
+                        imageUrl: snapshot.data!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[900],
+                          child: const Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[800],
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.album, color: Colors.white, size: 50),
+                              SizedBox(height: 8),
+                              Text(
+                                'Image not available',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   )
                 : Container(
                     color: Colors.grey[800],
@@ -1029,23 +1078,49 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: CachedNetworkImage(
-                      imageUrl: entry.value['image_url'] ?? widget.album['image_url'] ?? '',
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        width: 40,
-                        height: 40,
-                        color: Colors.grey[850],
-                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        entry.value['image_url'],
+                        entry.value['image_identifier'],
                       ),
-                      errorWidget: (context, url, error) => Container(
-                        width: 40,
-                        height: 40,
-                        color: Colors.grey[850],
-                        child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
-                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            width: 40,
+                            height: 40,
+                            color: Colors.grey[850],
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Container(
+                            width: 40,
+                            height: 40,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.error_outline, color: Colors.white54, size: 20),
+                          );
+                        }
+
+                        return CachedNetworkImage(
+                          imageUrl: snapshot.data!,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 40,
+                            height: 40,
+                            color: Colors.grey[850],
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 40,
+                            height: 40,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   // Show download indicator in the corner if downloaded

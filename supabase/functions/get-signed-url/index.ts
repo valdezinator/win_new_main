@@ -11,9 +11,8 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
   try {
-    // Retrieve the file identifier from the request body.
-    // For example, this might be: "songs/Do+You+Wanna+Be+Perfect"
-    const { fileIdentifier } = await req.json();
+    // Retrieve the file identifier and type from the request body.
+    const { fileIdentifier, fileType = 'audio' } = await req.json();
     if (!fileIdentifier) {
       throw new Error("File identifier is required");
     }
@@ -59,15 +58,15 @@ serve(async (req) => {
     }
     const bucketId = bucketsData.buckets[0].bucketId;
 
-    // 3. Build the final file name.
-    // If the fileIdentifier does not end with ".mp3", append it.
-    // Do not change the plus signs since they are part of the file name.
-    const finalIdentifier = fileIdentifier.endsWith(".mp3")
-      ? fileIdentifier
-      : fileIdentifier + ".mp3";
+    // 3. Build the final file name based on file type
+    let finalIdentifier = fileIdentifier;
+    if (fileType === 'audio' && !fileIdentifier.endsWith('.mp3')) {
+      finalIdentifier = fileIdentifier + '.mp3';
+    } else if (fileType === 'image' && !fileIdentifier.endsWith('.jpg') && !fileIdentifier.endsWith('.png')) {
+      finalIdentifier = fileIdentifier + '.jpg'; // Default to jpg if no extension
+    }
 
-    // 4. Request a download authorization using finalIdentifier.
-    // The fileNamePrefix passed here must match the file name stored on Backblaze.
+    // 4. Request a download authorization using finalIdentifier
     const downloadResponse = await fetch(`${apiUrl}/b2api/v2/b2_get_download_authorization`, {
       method: "POST",
       headers: {
@@ -86,8 +85,7 @@ serve(async (req) => {
     const downloadData = await downloadResponse.json();
     const downloadToken = downloadData.authorizationToken;
 
-    // 5. Construct the signed URL.
-    // We do NOT further manipulate the finalIdentifier so that plus signs remain intact.
+    // 5. Construct the signed URL
     const signedUrl = `${downloadUrl}/file/${bucketName}/${finalIdentifier}?Authorization=${downloadToken}`;
 
     return new Response(JSON.stringify({ signedUrl }), {
