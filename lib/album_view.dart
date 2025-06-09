@@ -248,8 +248,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                   audio_url,
                   image_url,
                   file_identifier,
-                  duration,
-                  /* song_lyrics commented out */
+                  duration
                 ),
                 dynamic_playlists!inner (
                   id,
@@ -271,8 +270,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                       audio_url,
                       image_url,
                       file_identifier,
-                      duration,
-                      /* song_lyrics commented out */
+                      duration
                     )
                   ''')
                   .eq('playlist_id', widget.album['id'])
