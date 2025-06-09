@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'audio_service.dart'; // Import AudioService
 
@@ -84,7 +85,16 @@ class AdManagerService {
     try {
       // TODO: Replace with actual ad audio URL
       // Play the ad using the main player
-      await _mainAudioPlayer!.setUrl('https://file-examples.com/storage/v1/2017/11/file_example_WAV_1MG.wav'); // Using a sample URL
+      await _mainAudioPlayer!.setAudioSource(
+        AudioSource.uri(
+          Uri.parse('https://file-examples.com/storage/v1/2017/11/file_example_WAV_1MG.wav'),
+          tag: MediaItem(
+            id: 'ad_${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Advertisement',
+            artist: 'Sponsored Content',
+          ),
+        ),
+      );
       await _mainAudioPlayer!.play();
       
       // Track ad impression

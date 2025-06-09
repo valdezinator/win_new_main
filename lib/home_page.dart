@@ -20,6 +20,7 @@ import 'widgets/dynamic_playlists_section.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 import 'package:palette_generator/palette_generator.dart';
 import 'services/backblaze_service.dart';
+import 'widgets/quick_play_section.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -600,86 +601,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Dynamic Playlists Section
             DynamicPlaylistsSection(
               onPlaylistSelected: (playlist) {
-                // Authentication is already checked in DynamicPlaylistsSection
-                // before this callback is called
-
-                // Use ContentViewController to navigate to the playlist view
-                // This keeps the main layout consistent (sidebar and player)
                 _navigateToAlbum(playlist);
               },
             ),
             const SizedBox(height: 40),
 
             // Quick Play Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Quick Play',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to see all quick play songs
-                  },
-                  child: Text(
-                    'See All',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ),
-              ],
-            ),            const SizedBox(height: 16),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: fetchSongs(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  //print('Error in Quick Play: ${snapshot.error}');
-                  return const Center(
-                    child: Text(
-                      'Error loading songs',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No songs found',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
-                final songs = snapshot.data!;
-                final displaySongs = songs.length > 8
-                    ? (songs..shuffle()).take(8).toList()
-                    : songs;
-
-                return SizedBox(
-                  height: 230,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: displaySongs.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: _buildQuickPlayCard(displaySongs[index]),
-                      );
-                    },
-                  ),
-                );
+            QuickPlaySection(
+              onSongSelected: (song) {
+                _audioService.playSong(song);
               },
             ),
             const SizedBox(height: 40),
@@ -911,115 +841,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 100), // Space for player
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickPlayCard(Map<String, dynamic> song) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => playSong(song),
-        child: Container(
-          width: 180,
-          height: 250,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Album Art with Backblaze support
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                child: FutureBuilder<String>(
-                  future: _backblazeService.getImageUrl(
-                    song['image_url'],
-                    song['file_identifier'],
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Container(
-                        width: 180,
-                        height: 180,
-                        color: Colors.grey[800],
-                        child: const Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-
-                    if (snapshot.hasError) {
-                      return Container(
-                        width: 180,
-                        height: 180,
-                        color: Colors.grey[800],
-                        child: const Center(
-                          child: Icon(Icons.error_outline, color: Colors.white, size: 40),
-                        ),
-                      );
-                    }
-
-                    return CachedNetworkImage(
-                      imageUrl: snapshot.data!,
-                      width: 180,
-                      height: 180,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, error, stackTrace) {
-                        return Container(
-                          width: 180,
-                          height: 180,
-                          color: Colors.grey[800],
-                          child: const Center(
-                            child: Icon(Icons.music_note, color: Colors.white, size: 40),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              // Song Info
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0), // Reduced vertical padding
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: 20, // Fixed height for title
-                      child: Text(
-                        song['title'] ?? 'Unknown Title',
-                        style: GoogleFonts.montserrat(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1, // Reduced to 1 line
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(height: 1), // Reduced height
-                    SizedBox(
-                      height: 16, // Fixed height for artist
-                      child: Text(
-                        song['artist'] ?? 'Unknown Artist',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

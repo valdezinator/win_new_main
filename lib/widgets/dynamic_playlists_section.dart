@@ -3,6 +3,7 @@ import '../services/dynamic_playlist_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'daily_mix_card.dart';
 
 class DynamicPlaylistsSection extends StatefulWidget {
   final Function(Map<String, dynamic>) onPlaylistSelected;
@@ -119,7 +120,7 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
           ),
         ),
         SizedBox(
-          height: 200,
+          height: 290,
           child: FutureBuilder<List<Map<String, dynamic>>>(
             key: ValueKey(DateTime.now().toString()), // Force rebuild on refresh
             future: _playlistService.getDynamicPlaylists(),
@@ -146,9 +147,12 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
                   final playlist = playlists[index];
                   return Padding(
                     padding: const EdgeInsets.only(right: 16),
-                    child: GestureDetector(
+                    child: DailyMixCard(
+                      imageUrl: playlist['image_url'] ?? '',
+                      title: _getCurrentTimeOfDay() + ' Mix',
+                      subtitle: playlist['name'] ?? 'Untitled Playlist',
+                      description: playlist['description'] ?? 'Your personalized mix for ' + _getCurrentTimeOfDay() + ' vibes',
                       onTap: () {
-                        // Check if user is logged in before navigating
                         final userId = Supabase.instance.client.auth.currentUser?.id;
                         if (userId == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -162,53 +166,6 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
                         }
                         widget.onPlaylistSelected(playlist);
                       },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: SizedBox(
-                              width: 140,
-                              height: 140,
-                              child: CachedNetworkImage(
-                                imageUrl: playlist['image_url'] ?? '',
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(Icons.music_note),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: 140,
-                            child: Text(
-                              playlist['name'] ?? 'Untitled Playlist',
-                              style: Theme.of(context).textTheme.titleSmall,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          SizedBox(
-                            width: 140,
-                            child: Text(
-                              playlist['description'] ?? '',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   );
                 },
