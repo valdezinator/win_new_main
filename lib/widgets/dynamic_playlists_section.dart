@@ -42,8 +42,8 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
     super.dispose();
   }
 
-  // Method to refresh the dynamic playlist
-  Future<void> _refreshDynamicPlaylist() async {
+  // Method to refresh all dynamic playlists
+  Future<void> _refreshAllPlaylists() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,8 +62,8 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(success
-            ? 'Playlist refreshed for ${_getCurrentTimeOfDay()}'
-            : 'Failed to refresh playlist'),
+            ? 'Playlists refreshed'
+            : 'Failed to refresh playlists'),
           backgroundColor: success ? Colors.green : Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -111,8 +111,8 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
                           child: CircularProgressIndicator(strokeWidth: 2)
                         )
                       : const Icon(Icons.refresh, color: Colors.white),
-                    tooltip: 'Refresh for ${_getCurrentTimeOfDay()}',
-                    onPressed: isRefreshing ? null : _refreshDynamicPlaylist,
+                    tooltip: 'Refresh all playlists',
+                    onPressed: isRefreshing ? null : _refreshAllPlaylists,
                   );
                 }
               ),
@@ -139,19 +139,36 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
                 return const Center(child: Text('No dynamic playlists available'));
               }
 
+              // Group playlists by type
+              final Map<String, List<Map<String, dynamic>>> groupedPlaylists = {};
+              for (final playlist in playlists) {
+                final type = playlist['playlist_type'] as String? ?? 'unknown';
+                if (!groupedPlaylists.containsKey(type)) {
+                  groupedPlaylists[type] = [];
+                }
+                groupedPlaylists[type]!.add(playlist);
+              }
+
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: playlists.length,
+                itemCount: DynamicPlaylistService.ALL_PLAYLIST_TYPES.length,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemBuilder: (context, index) {
-                  final playlist = playlists[index];
+                  final playlistType = DynamicPlaylistService.ALL_PLAYLIST_TYPES[index];
+                  final typePlaylists = groupedPlaylists[playlistType] ?? [];
+                  
+                  if (typePlaylists.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final playlist = typePlaylists.first;
                   return Padding(
                     padding: const EdgeInsets.only(right: 16),
                     child: DailyMixCard(
                       imageUrl: playlist['image_url'] ?? '',
-                      title: _getCurrentTimeOfDay() + ' Mix',
+                      title: _getPlaylistTitle(playlistType),
                       subtitle: playlist['name'] ?? 'Untitled Playlist',
-                      description: playlist['description'] ?? 'Your personalized mix for ' + _getCurrentTimeOfDay() + ' vibes',
+                      description: playlist['description'] ?? _getPlaylistDescription(playlistType),
                       onTap: () {
                         final userId = Supabase.instance.client.auth.currentUser?.id;
                         if (userId == null) {
@@ -175,5 +192,55 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
         ),
       ],
     );
+  }
+
+  String _getPlaylistTitle(String playlistType) {
+    switch (playlistType) {
+      case DynamicPlaylistService.PLAYLIST_TYPE_DAYLIST:
+        return _getCurrentTimeOfDay() + ' Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_MOOD_MIX:
+        return 'Mood Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_FOCUS_FLOW:
+        return 'Focus Flow';
+      case DynamicPlaylistService.PLAYLIST_TYPE_WORKOUT_MIX:
+        return 'Workout Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_CHILL_VIBES:
+        return 'Chill Vibes';
+      case DynamicPlaylistService.PLAYLIST_TYPE_DISCOVERY_MIX:
+        return 'Discovery Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_THROWBACK_MIX:
+        return 'Throwback Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_PARTY_MIX:
+        return 'Party Mix';
+      case DynamicPlaylistService.PLAYLIST_TYPE_SLEEP_MIX:
+        return 'Sleep Mix';
+      default:
+        return 'Unknown Mix';
+    }
+  }
+
+  String _getPlaylistDescription(String playlistType) {
+    switch (playlistType) {
+      case DynamicPlaylistService.PLAYLIST_TYPE_DAYLIST:
+        return 'Your personalized mix for ${_getCurrentTimeOfDay()} vibes';
+      case DynamicPlaylistService.PLAYLIST_TYPE_MOOD_MIX:
+        return 'Songs that match your current mood';
+      case DynamicPlaylistService.PLAYLIST_TYPE_FOCUS_FLOW:
+        return 'Music to help you concentrate';
+      case DynamicPlaylistService.PLAYLIST_TYPE_WORKOUT_MIX:
+        return 'High-energy tracks for your workout';
+      case DynamicPlaylistService.PLAYLIST_TYPE_CHILL_VIBES:
+        return 'Relaxing tunes for your downtime';
+      case DynamicPlaylistService.PLAYLIST_TYPE_DISCOVERY_MIX:
+        return 'New music based on your taste';
+      case DynamicPlaylistService.PLAYLIST_TYPE_THROWBACK_MIX:
+        return 'Your favorite songs from the past';
+      case DynamicPlaylistService.PLAYLIST_TYPE_PARTY_MIX:
+        return 'High-energy tracks for your party';
+      case DynamicPlaylistService.PLAYLIST_TYPE_SLEEP_MIX:
+        return 'Calming music to help you sleep';
+      default:
+        return 'A mix of songs';
+    }
   }
 }

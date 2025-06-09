@@ -876,8 +876,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            Container(
-              margin: const EdgeInsets.only(bottom: 32),
+            SizedBox(
+              height: 180, // Fixed height for horizontal list
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: categorizedResults['Artists']!.length,
@@ -900,11 +900,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: categorizedResults['Albums']!.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 16),
+                separatorBuilder: (_, __) => const SizedBox(width: 24),
                 itemBuilder: (context, idx) => _buildSearchAlbumCard(categorizedResults['Albums']![idx]),
               ),
             ),
-            const SizedBox(height: 32),
           ],
 
           // Remaining Songs Section

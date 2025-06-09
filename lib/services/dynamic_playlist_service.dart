@@ -12,6 +12,29 @@ class DynamicPlaylistService {
   // Stream controller for refresh state
   final ValueNotifier<bool> isRefreshing = ValueNotifier<bool>(false);
 
+  // Playlist type constants
+  static const String PLAYLIST_TYPE_DAYLIST = 'daylist';
+  static const String PLAYLIST_TYPE_MOOD_MIX = 'mood_mix';
+  static const String PLAYLIST_TYPE_FOCUS_FLOW = 'focus_flow';
+  static const String PLAYLIST_TYPE_WORKOUT_MIX = 'workout_mix';
+  static const String PLAYLIST_TYPE_CHILL_VIBES = 'chill_vibes';
+  static const String PLAYLIST_TYPE_DISCOVERY_MIX = 'discovery_mix';
+  static const String PLAYLIST_TYPE_THROWBACK_MIX = 'throwback_mix';
+  static const String PLAYLIST_TYPE_PARTY_MIX = 'party_mix';
+  static const String PLAYLIST_TYPE_SLEEP_MIX = 'sleep_mix';
+
+  static const List<String> ALL_PLAYLIST_TYPES = [
+    PLAYLIST_TYPE_DAYLIST,
+    PLAYLIST_TYPE_MOOD_MIX,
+    PLAYLIST_TYPE_FOCUS_FLOW,
+    PLAYLIST_TYPE_WORKOUT_MIX,
+    PLAYLIST_TYPE_CHILL_VIBES,
+    PLAYLIST_TYPE_DISCOVERY_MIX,
+    PLAYLIST_TYPE_THROWBACK_MIX,
+    PLAYLIST_TYPE_PARTY_MIX,
+    PLAYLIST_TYPE_SLEEP_MIX,
+  ];
+
   static const String _lastDailyUpdateKey = 'last_daily_playlist_update';
   static const String _lastWeeklyUpdateKey = 'last_weekly_playlist_update';
   static const int _autoRefreshInterval = 60; // Auto refresh check interval in minutes
@@ -26,10 +49,10 @@ class DynamicPlaylistService {
     print('DynamicPlaylistService - Current user: ${user?.id}');
     print('DynamicPlaylistService - Is authenticated: ${user != null}');
 
-    // Try to find the correct function name
-    await _findCorrectPlaylistFunction();
+    if (user == null) return;
 
-    await _checkAndGeneratePlaylists();
+    // Generate initial playlists
+    await _generateAllPlaylists();
 
     // Schedule daily playlists update
     _dailyTimer = Timer.periodic(const Duration(hours: 6), (_) {
@@ -97,7 +120,7 @@ class DynamicPlaylistService {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     if (now - lastUpdate > 12 * 60 * 60 * 1000) { // 12 hours
-      await _generateDaylist();
+      await _generateAllPlaylists();
       await prefs.setInt(_lastDailyUpdateKey, now);
     }
   }
@@ -113,51 +136,73 @@ class DynamicPlaylistService {
     }
   }
 
-  Future<Map<String, dynamic>?> _generateDaylist() async {
+  Future<void> _generateAllPlaylists() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Generate daylist first
+      await _generatePlaylistByType(PLAYLIST_TYPE_DAYLIST);
+
+      // Generate rewind playlist
+      await _generatePlaylistByType('rewind');
+
+      // Generate other playlist types using fallback
+      for (final playlistType in ALL_PLAYLIST_TYPES) {
+        if (playlistType != PLAYLIST_TYPE_DAYLIST && playlistType != 'rewind') {
+          await _generatePlaylistByType(playlistType);
+        }
+      }
+    } catch (e) {
+      print('Error generating all playlists: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> _generatePlaylistByType(String playlistType) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
 
-      final currentHour = DateTime.now().hour;
-
-      // Based on the SQL code, we should use generate_all_dynamic_playlists
+      // Try to use database functions first
       try {
-        // Call the main function to generate all dynamic playlists
-        final response = await _supabase.rpc(
-          'generate_all_dynamic_playlists',
-          params: {
-            'user_uuid': userId,
-          },
-        );
+        if (playlistType == PLAYLIST_TYPE_DAYLIST) {
+          final response = await _supabase.rpc(
+            'generate_daylist',
+            params: {
+              'user_uuid': userId,
+              'current_hour': DateTime.now().hour,
+            },
+          );
 
-        // If successful, get the playlist that was created
-        if (response != null) {
-          // Get the daylist playlist
-          final playlists = await _supabase
-              .from('dynamic_playlists')
-              .select()
-              .eq('user_id', userId)
-              .eq('playlist_type', 'daylist')
-              .limit(1);
+          if (response != null && (response as List).isNotEmpty) {
+            return response[0];
+          }
+        } else if (playlistType == 'rewind') {
+          final response = await _supabase.rpc(
+            'generate_rewind',
+            params: {
+              'user_uuid': userId,
+            },
+          );
 
-          if ((playlists as List).isNotEmpty) {
-            return playlists[0];
+          if (response != null && (response as List).isNotEmpty) {
+            return response[0];
           }
         }
-        return null;
       } catch (e) {
-        // Try the direct function for generating daylist songs
-        // Skip this part to avoid the PostgrestException
-        return null;
+        print('Database function error for $playlistType: $e');
+        // Continue to fallback if database function fails
       }
+
+      // Use fallback for all playlist types
+      return await _createFallbackPlaylist(playlistType);
     } catch (e) {
-      // Error in the main try block
-      return null;
+      print('Error generating playlist of type $playlistType: $e');
+      return await _createFallbackPlaylist(playlistType);
     }
   }
 
-  /// Create a fallback playlist if the RPC functions fail
-  Future<Map<String, dynamic>?> _createFallbackPlaylist() async {
+  Future<Map<String, dynamic>?> _createFallbackPlaylist(String playlistType) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
@@ -165,15 +210,16 @@ class DynamicPlaylistService {
       final currentHour = DateTime.now().hour;
       final timeOfDay = _getTimeOfDayCategory(currentHour);
 
-      print('Creating fallback playlist for $timeOfDay');
+      // Get playlist metadata based on type
+      final playlistMetadata = _getPlaylistMetadata(playlistType, timeOfDay);
 
-      // First check if we already have a dynamic playlist for this user
+      // First check if we already have a dynamic playlist for this user and type
       try {
         final existingPlaylists = await _supabase
             .from('dynamic_playlists')
             .select()
             .eq('user_id', userId)
-            .eq('playlist_type', 'daylist');
+            .eq('playlist_type', playlistType);
 
         if ((existingPlaylists as List).isNotEmpty) {
           // Update the existing playlist
@@ -182,73 +228,74 @@ class DynamicPlaylistService {
           // Update the playlist metadata
           await _supabase
               .from('dynamic_playlists')
-              .update({
-                'name': '$timeOfDay Mix',
-                'description': 'Your personalized mix for $timeOfDay vibes',
-                // The last_updated column is automatically updated by the database
-              })
+              .update(playlistMetadata)
               .eq('id', playlistId);
 
-          // Get some songs for the playlist
-          final songs = await _supabase
-              .from('songs_2')
-              .select('id')
-              .limit(20);
+          // Get songs for the playlist based on type
+          final songs = await _getSongsForPlaylistType(playlistType);
 
-          // Clear existing songs
-          await _supabase
-              .from('dynamic_playlist_songs')
-              .delete()
-              .eq('playlist_id', playlistId);
-
-          // Add new songs
-          for (var i = 0; i < (songs as List).length; i++) {
+          if (songs.isNotEmpty) {
+            // Clear existing songs
             await _supabase
                 .from('dynamic_playlist_songs')
-                .insert({
-                  'playlist_id': playlistId,
-                  'song_id': songs[i]['id'],
-                  'position': i + 1,
-                });
-          }
+                .delete()
+                .eq('playlist_id', playlistId);
 
-          // Return the updated playlist
-          return existingPlaylists[0];
-        } else {
-          // Create a new playlist
-          final response = await _supabase
-              .from('dynamic_playlists')
-              .insert({
-                'user_id': userId,
-                'playlist_type': 'daylist',
-                'name': '$timeOfDay Mix',
-                'description': 'Your personalized mix for $timeOfDay vibes',
-                'image_url': 'https://picsum.photos/200', // Placeholder image
-              })
-              .select();
-
-          if ((response as List).isNotEmpty) {
-            final playlistId = response[0]['id'];
-
-            // Get some songs for the playlist
-            final songs = await _supabase
-                .from('songs_2')
-                .select('id')
-                .limit(20);
-
-            // Add songs to the playlist
-            for (var i = 0; i < (songs as List).length; i++) {
-              await _supabase
-                  .from('dynamic_playlist_songs')
-                  .insert({
-                    'playlist_id': playlistId,
-                    'song_id': songs[i]['id'],
-                    'position': i + 1,
-                  });
+            // Add new songs with unique IDs
+            for (var i = 0; i < songs.length; i++) {
+              try {
+                await _supabase
+                    .from('dynamic_playlist_songs')
+                    .insert({
+                      'id': DateTime.now().millisecondsSinceEpoch.toString() + '_' + i.toString(), // Generate unique ID
+                      'playlist_id': playlistId,
+                      'song_id': songs[i]['id'],
+                      'position': i + 1,
+                    });
+              } catch (e) {
+                print('Error adding song ${songs[i]['id']} to playlist: $e');
+                // Continue with next song if one fails
+              }
             }
-
-            return response[0];
           }
+
+          return existingPlaylists[0];
+        }
+
+        // Create a new playlist if none exists
+        final response = await _supabase
+            .from('dynamic_playlists')
+            .insert({
+              'user_id': userId,
+              'playlist_type': playlistType,
+              ...playlistMetadata,
+            })
+            .select();
+
+        if ((response as List).isNotEmpty) {
+          final playlistId = response[0]['id'];
+          final songs = await _getSongsForPlaylistType(playlistType);
+
+          if (songs.isNotEmpty) {
+            // Add songs to the playlist with unique IDs
+            for (var i = 0; i < songs.length; i++) {
+              try {
+                await _supabase
+                    .from('dynamic_playlist_songs')
+                    .insert({
+                      'id': DateTime.now().millisecondsSinceEpoch.toString() + '_' + i.toString(), // Generate unique ID
+                      'playlist_id': playlistId,
+                      'song_id': songs[i]['id'],
+                      'position': i + 1,
+                    });
+              } catch (e) {
+                print('Error adding song ${songs[i]['id']} to playlist: $e');
+                // Continue with next song if one fails
+              }
+            }
+          }
+
+          return response[0];
         }
       } catch (e) {
         print('Error in fallback playlist creation: $e');
@@ -258,6 +305,128 @@ class DynamicPlaylistService {
     } catch (e) {
       print('Error creating fallback playlist: $e');
       return null;
+    }
+  }
+
+  Map<String, dynamic> _getPlaylistMetadata(String playlistType, String timeOfDay) {
+    switch (playlistType) {
+      case PLAYLIST_TYPE_DAYLIST:
+        return {
+          'name': '$timeOfDay Mix',
+          'description': 'Your personalized mix for $timeOfDay vibes',
+          'image_url': 'https://picsum.photos/200',
+        };
+      case PLAYLIST_TYPE_MOOD_MIX:
+        return {
+          'name': 'Mood Mix',
+          'description': 'Songs that match your current mood',
+          'image_url': 'https://picsum.photos/201',
+        };
+      case PLAYLIST_TYPE_FOCUS_FLOW:
+        return {
+          'name': 'Focus Flow',
+          'description': 'Music to help you concentrate',
+          'image_url': 'https://picsum.photos/202',
+        };
+      case PLAYLIST_TYPE_WORKOUT_MIX:
+        return {
+          'name': 'Workout Mix',
+          'description': 'High-energy tracks for your workout',
+          'image_url': 'https://picsum.photos/203',
+        };
+      case PLAYLIST_TYPE_CHILL_VIBES:
+        return {
+          'name': 'Chill Vibes',
+          'description': 'Relaxing tunes for your downtime',
+          'image_url': 'https://picsum.photos/204',
+        };
+      case PLAYLIST_TYPE_DISCOVERY_MIX:
+        return {
+          'name': 'Discovery Mix',
+          'description': 'New music based on your taste',
+          'image_url': 'https://picsum.photos/205',
+        };
+      case PLAYLIST_TYPE_THROWBACK_MIX:
+        return {
+          'name': 'Throwback Mix',
+          'description': 'Your favorite songs from the past',
+          'image_url': 'https://picsum.photos/206',
+        };
+      case PLAYLIST_TYPE_PARTY_MIX:
+        return {
+          'name': 'Party Mix',
+          'description': 'High-energy tracks for your party',
+          'image_url': 'https://picsum.photos/207',
+        };
+      case PLAYLIST_TYPE_SLEEP_MIX:
+        return {
+          'name': 'Sleep Mix',
+          'description': 'Calming music to help you sleep',
+          'image_url': 'https://picsum.photos/208',
+        };
+      default:
+        return {
+          'name': 'Unknown Mix',
+          'description': 'A mix of songs',
+          'image_url': 'https://picsum.photos/200',
+        };
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getSongsForPlaylistType(String playlistType) async {
+    try {
+      var baseQuery = _supabase.from('songs_2').select('id');
+      dynamic query;
+
+      switch (playlistType) {
+        case PLAYLIST_TYPE_MOOD_MIX:
+          // Get songs with mood-related tags or high play count
+          query = baseQuery.or('genre.ilike.%chill%,genre.ilike.%relax%')
+              .order('play_count', ascending: false);
+          break;
+        case PLAYLIST_TYPE_FOCUS_FLOW:
+          // Get instrumental or ambient songs or high play count
+          query = baseQuery.or('genre.ilike.%instrumental%,genre.ilike.%ambient%')
+              .order('play_count', ascending: false);
+          break;
+        case PLAYLIST_TYPE_WORKOUT_MIX:
+          // Get high-energy songs or high play count
+          query = baseQuery.or('genre.ilike.%dance%,genre.ilike.%electronic%')
+              .order('play_count', ascending: false);
+          break;
+        case PLAYLIST_TYPE_CHILL_VIBES:
+          // Get relaxing songs or high play count
+          query = baseQuery.or('genre.ilike.%lofi%,genre.ilike.%ambient%')
+              .order('play_count', ascending: false);
+          break;
+        case PLAYLIST_TYPE_DISCOVERY_MIX:
+          // Get recently added songs
+          query = baseQuery.order('created_at', ascending: false);
+          break;
+        case PLAYLIST_TYPE_THROWBACK_MIX:
+          // Get older songs - using created_at instead of release_date
+          query = baseQuery.order('created_at', ascending: true);
+          break;
+        case PLAYLIST_TYPE_PARTY_MIX:
+          // Get party songs or high play count
+          query = baseQuery.or('genre.ilike.%dance%,genre.ilike.%party%')
+              .order('play_count', ascending: false);
+          break;
+        case PLAYLIST_TYPE_SLEEP_MIX:
+          // Get sleep-friendly songs or high play count
+          query = baseQuery.or('genre.ilike.%ambient%,genre.ilike.%lullaby%')
+              .order('play_count', ascending: false);
+          break;
+        default:
+          // For daylist, get a mix of songs
+          query = baseQuery.order('play_count', ascending: false);
+      }
+
+      final response = await query.limit(20);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error getting songs for playlist type $playlistType: $e');
+      return [];
     }
   }
 
@@ -271,7 +440,7 @@ class DynamicPlaylistService {
       await prefs.setInt('last_playlist_hour', DateTime.now().hour);
 
       // Try to generate new daylist using RPC functions, fall back to manual creation if needed
-      var result = await _generateDaylist() ?? await _createFallbackPlaylist();
+      var result = await _generatePlaylistByType(PLAYLIST_TYPE_DAYLIST) ?? await _createFallbackPlaylist(PLAYLIST_TYPE_DAYLIST);
 
       // Force update the last update timestamp
       await prefs.setInt(_lastDailyUpdateKey, DateTime.now().millisecondsSinceEpoch);
