@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'services/backblaze_service.dart';
+import 'services/analytics_service.dart';
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -37,6 +38,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   int _keyboardSelectedIndex = -1;
   FocusNode _searchFocusNode = FocusNode();
   final BackblazeService _backblazeService = BackblazeService();
+  final AnalyticsService _analyticsService = AnalyticsService();
 
   // Tab controller for the search results tabs
   // late TabController _tabController;
@@ -122,14 +124,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   void _onSearchChanged(String value) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      searchSongs(value);
+      _performSearch(value);
     });
     setState(() {
       isSearching = true;
     });
   }
 
-  Future<void> searchSongs(String query) async {
+  Future<void> _performSearch(String query) async {
     if (query.isEmpty) {
       setState(() {
         categorizedResults = {};
@@ -137,8 +139,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       });
       return;
     }
-
-    setState(() => isSearching = true);
+    
+    setState(() {
+      isSearching = true;
+    });
+    
     try {
       final songsFuture = widget.supabaseClient
           .from('songs_2')
@@ -171,9 +176,36 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         };
         isSearching = false;
       });
+      
+      // Log search event
+      _analyticsService.logSearch(
+        query: query,
+        resultCount: categorizedResults['Songs']?.length ?? 0,
+        resultType: 'song',
+      );
+      
     } catch (e) {
-      //print('Error searching content: $e');
-      setState(() => isSearching = false);
+      setState(() {
+        isSearching = false;
+      });
+      
+      // Log search error
+      _analyticsService.logEvent(
+        'search_error',
+        parameters: {
+          'query': query,
+          'error': e.toString(),
+        },
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error performing search: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

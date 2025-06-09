@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'services/security_service.dart';
 import 'services/ad_manager_service.dart';
 import 'services/audio_service.dart';
+import 'services/analytics_service.dart';
 
 // Create a global instance of AudioService
 final AudioService _audioService = AudioService();
@@ -36,6 +37,79 @@ Future<void> loadEnv() async {
     // In production, you might want to log this to a service like Sentry
     debugPrint('Error loading environment variables: $e');
     rethrow; // Re-throw to prevent the app from starting with invalid config
+  }
+}
+
+// Create a custom window listener class
+class CustomWindowListener extends WindowListener {
+  final AnalyticsService analyticsService;
+
+  CustomWindowListener(this.analyticsService);
+
+  @override
+  void onWindowMoved() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'moved',
+      size: size,
+      position: position,
+    );
+  }
+
+  @override
+  void onWindowResized() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'resized',
+      size: size,
+      position: position,
+    );
+  }
+
+  @override
+  void onWindowMaximized() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'maximized',
+      size: size,
+      position: position,
+    );
+  }
+
+  @override
+  void onWindowUnmaximized() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'unmaximized',
+      size: size,
+      position: position,
+    );
+  }
+
+  @override
+  void onWindowMinimized() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'minimized',
+      size: size,
+      position: position,
+    );
+  }
+
+  @override
+  void onWindowRestored() async {
+    final size = await windowManager.getSize();
+    final position = await windowManager.getPosition();
+    analyticsService.logWindowState(
+      state: 'restored',
+      size: size,
+      position: position,
+    );
   }
 }
 
@@ -92,6 +166,13 @@ Future<void> main() async {
     notificationColor: Colors.grey[900],
   );
 
+  // Initialize analytics service
+  final analyticsService = AnalyticsService();
+  await analyticsService.initialize();
+  
+  // Listen to window state changes
+  windowManager.addListener(CustomWindowListener(analyticsService));
+
   // Initialize Supabase using environment variables
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
@@ -104,29 +185,6 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  Future<Map<String, dynamic>> checkLoginState() async {
-    final securityService = SecurityService();
-    final isSessionValid = await securityService.isSessionValid();
-
-    if (!isSessionValid) {
-      // Clear invalid session
-      await securityService.clearSession();
-      return {'isLoggedIn': false};
-    }
-
-    // Get last played song state (encrypted)
-    final lastPlayedSong = await securityService.secureRead('last_played_song');
-    final wasPlaying = await securityService.secureRead('was_playing') == 'true';
-
-    return {
-      'isLoggedIn': true,
-      'lastPlayedSong': lastPlayedSong != null ? Map<String, dynamic>.from(
-        json.decode(lastPlayedSong)
-      ) : null,
-      'wasPlaying': wasPlaying,
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -136,26 +194,60 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: FutureBuilder<Map<String, dynamic>>(
-        future: checkLoginState(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-
-          final state = snapshot.data ?? {'isLoggedIn': false};
-          if (state['isLoggedIn']) {
-            return const MainApp();
-          } else {
-            return const LoginScreen();
-          }
-        },
-      ),
+      home: const AuthWrapper(),
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  final _analyticsService = AnalyticsService();
+  User? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginState();
+  }
+
+  Future<void> _checkLoginState() async {
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        _user = session.user;
+        await _analyticsService.logUserSession(_user);
+      } else {
+        _user = null;
+        await _analyticsService.logUserSession(null);
+      }
+    } catch (e) {
+      debugPrint('Error checking login state: $e');
+      _user = null;
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return _user == null ? const LoginScreen() : const MainApp();
   }
 }
 

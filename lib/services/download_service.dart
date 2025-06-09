@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 import 'secure_storage_service.dart';
+import 'analytics_service.dart';
 
 class DownloadService {
   static final DownloadService _instance = DownloadService._internal();
@@ -14,6 +15,7 @@ class DownloadService {
 
   final _downloadProgressController = StreamController<Map<String, double>>.broadcast();
   final _secureStorage = SecureStorageService();
+  final _analyticsService = AnalyticsService();
 
   Stream<Map<String, double>> get downloadProgress => _downloadProgressController.stream;
 
@@ -87,6 +89,20 @@ class DownloadService {
       // Wait for all downloads to complete
       await Future.wait(songDownloads);
 
+      // Calculate total size of downloaded files
+      int totalSize = 0;
+      for (var song in songs) {
+        if (song['audio_url'] != null) {
+          final response = await http.head(Uri.parse(song['audio_url']));
+          totalSize += response.contentLength ?? 0;
+        }
+      }
+      // Add album cover size if it exists
+      if (album['image_url'] != null) {
+        final response = await http.head(Uri.parse(album['image_url']));
+        totalSize += response.contentLength ?? 0;
+      }
+
       // Store metadata with additional information for offline playback
       final albumId = album['id']?.toString() ?? '';
       print('Preparing metadata for album ID: $albumId');
@@ -127,7 +143,23 @@ class DownloadService {
           'album_${int.parse(albumId)}_metadata',
         );
       }
+
+      // Log successful download
+      _analyticsService.logDownload(
+        contentId: album['id'].toString(),
+        contentType: 'album',
+        sizeBytes: totalSize,
+        success: true,
+      );
     } catch (e) {
+      // Log download error
+      _analyticsService.logDownload(
+        contentId: album['id'].toString(),
+        contentType: 'album',
+        sizeBytes: 0,
+        success: false,
+        errorMessage: e.toString(),
+      );
       print('Error downloading album: $e');
       rethrow;
     }

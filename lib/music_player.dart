@@ -17,6 +17,7 @@ import 'widgets/adaptive_features_indicator.dart';
 import 'widgets/lyrics_panel.dart';
 import 'widgets/ad_controls.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/analytics_service.dart';
 
 class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
@@ -42,6 +43,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   final NoiseDetectionService _noiseDetectionService = NoiseDetectionService();
   final RouteTrackingService _routeTrackingService = RouteTrackingService();
   final AdManagerService _adManager = AdManagerService();
+  final AnalyticsService _analyticsService = AnalyticsService();
   
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
@@ -357,6 +359,24 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     // Update jam session if host
     if (_isInJamSession && _jamSessionService.isHost) {
       _updateJamSessionPlayback();
+    }
+
+    if (isPlaying) {
+      _analyticsService.logSongPlayback(
+        songId: widget.song['id'].toString(),
+        songTitle: widget.song['title'],
+        artistName: widget.song['artist'],
+        albumName: widget.song['album'],
+        eventType: 'song_pause',
+      );
+    } else {
+      _analyticsService.logSongPlayback(
+        songId: widget.song['id'].toString(),
+        songTitle: widget.song['title'],
+        artistName: widget.song['artist'],
+        albumName: widget.song['album'],
+        eventType: 'song_play',
+      );
     }
   }
 
