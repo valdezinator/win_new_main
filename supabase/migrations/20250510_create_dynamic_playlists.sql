@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS dynamic_playlists (
   image_url TEXT,
   metadata JSONB,
   last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, playlist_type)
 );
 
 -- Create the dynamic_playlist_songs junction table
@@ -21,7 +22,7 @@ CREATE TABLE IF NOT EXISTS dynamic_playlist_songs (
 );
 
 -- Create function to generate the daylist
-CREATE OR REPLACE FUNCTION generate_daylist(user_uuid UUID, current_hour INTEGER)
+CREATE OR REPLACE FUNCTION generate_daylist(current_hour INTEGER, user_uuid UUID)
 RETURNS SETOF dynamic_playlists AS $$
 DECLARE
   new_playlist_id UUID;
@@ -49,7 +50,8 @@ BEGIN
     playlist_type,
     name,
     description,
-    metadata
+    metadata,
+    last_updated
   )
   VALUES (
     user_uuid,
@@ -59,10 +61,10 @@ BEGIN
     jsonb_build_object(
       'time_of_day', time_of_day,
       'mood', playlist_mood
-    )
+    ),
+    NOW()
   )
   ON CONFLICT (user_id, playlist_type) 
-  WHERE playlist_type = 'daylist'
   DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,
@@ -78,7 +80,7 @@ BEGIN
   SELECT 
     new_playlist_id,
     s.id,
-    ROW_NUMBER() OVER (ORDER BY RANDOM())
+    ROW_NUMBER() OVER (ORDER BY RANDOM())::INTEGER
   FROM songs s
   WHERE s.genre && ARRAY[playlist_mood]::varchar[]
   ORDER BY RANDOM()
@@ -101,7 +103,8 @@ BEGIN
     playlist_type,
     name,
     description,
-    metadata
+    metadata,
+    last_updated
   )
   VALUES (
     user_uuid,
@@ -111,10 +114,10 @@ BEGIN
     jsonb_build_object(
       'type', 'weekly_rewind',
       'week', EXTRACT(WEEK FROM NOW())::TEXT || '-' || EXTRACT(YEAR FROM NOW())::TEXT
-    )
+    ),
+    NOW()
   )
   ON CONFLICT (user_id, playlist_type) 
-  WHERE playlist_type = 'rewind'
   DO UPDATE SET
     last_updated = NOW()
   RETURNING id INTO new_playlist_id;
@@ -124,18 +127,24 @@ BEGIN
 
   -- Insert most played songs from the past week
   INSERT INTO dynamic_playlist_songs (playlist_id, song_id, position)
+  WITH song_counts AS (
+    SELECT 
+      s.id,
+      COUNT(*)::INTEGER as play_count
+    FROM play_history ph
+    JOIN songs s ON s.id = ph.song_id
+    WHERE 
+      ph.user_id = user_uuid
+      AND ph.played_at >= NOW() - INTERVAL '7 days'
+    GROUP BY s.id
+    ORDER BY play_count DESC
+    LIMIT 30
+  )
   SELECT 
     new_playlist_id,
-    s.id,
-    ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) as position
-  FROM play_history ph
-  JOIN songs s ON s.id = ph.song_id
-  WHERE 
-    ph.user_id = user_uuid
-    AND ph.played_at >= NOW() - INTERVAL '7 days'
-  GROUP BY s.id
-  ORDER BY COUNT(*) DESC
-  LIMIT 30;
+    id,
+    ROW_NUMBER() OVER (ORDER BY play_count DESC)::INTEGER as position
+  FROM song_counts;
 
   RETURN QUERY
   SELECT * FROM dynamic_playlists WHERE id = new_playlist_id;

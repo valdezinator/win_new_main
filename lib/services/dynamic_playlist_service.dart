@@ -247,7 +247,6 @@ class DynamicPlaylistService {
                 await _supabase
                     .from('dynamic_playlist_songs')
                     .insert({
-                      'id': DateTime.now().millisecondsSinceEpoch.toString() + '_' + i.toString(), // Generate unique ID
                       'playlist_id': playlistId,
                       'song_id': songs[i]['id'],
                       'position': i + 1,
@@ -283,7 +282,6 @@ class DynamicPlaylistService {
                 await _supabase
                     .from('dynamic_playlist_songs')
                     .insert({
-                      'id': DateTime.now().millisecondsSinceEpoch.toString() + '_' + i.toString(), // Generate unique ID
                       'playlist_id': playlistId,
                       'song_id': songs[i]['id'],
                       'position': i + 1,
