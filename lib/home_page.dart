@@ -847,275 +847,301 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHitAlbumCard(Map<String, dynamic> album) {
-    return GestureDetector(
-      onTap: () {
-        _navigateToAlbum(album);
-      },
-      child: Container(
-        width: 200,
-        height: 250,
-        margin: const EdgeInsets.only(right: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Album Cover with Backblaze support
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // Album Image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        album['image_url'],
-                        album['file_identifier'],
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.error_outline, color: Colors.white54, size: 48),
-                          );
-                        }
-
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          height: 200,
-                          width: 200,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  // Play button overlay (visible on hover)
-                  Positioned.fill(
-                    child: Container(
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool isHovering = false;
+        return MouseRegion(
+          onEnter: (_) => setState(() => isHovering = true),
+          onExit: (_) => setState(() => isHovering = false),
+          child: GestureDetector(
+            onTap: () {
+              _navigateToAlbum(album);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              transform: Matrix4.identity()..scale(isHovering ? 1.05 : 1.0),
+              child: Container(
+                width: 200,
+                height: 250,
+                margin: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Album Cover with Backblaze support
+                    Container(
+                      width: 200,
+                      height: 200,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.black.withOpacity(0.3),
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withOpacity(0.6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isHovering ? 0.4 : 0.2),
+                            blurRadius: isHovering ? 15 : 10,
+                            offset: Offset(0, isHovering ? 8 : 5),
                           ),
-                          child: const Icon(
-                            Icons.play_arrow,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
+                        ],
                       ),
-                    ),
-                  ),
-                  // Show download badge if album is downloaded
-                  if (album['downloaded'] == true)
-                    Positioned(
-                      right: 10,
-                      bottom: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green, width: 1),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.download_done,
-                              color: Colors.green,
-                              size: 16,
+                      child: Stack(
+                        children: [
+                          // Album Image
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: FutureBuilder<String>(
+                              future: _backblazeService.getImageUrl(
+                                album['image_url'],
+                                album['file_identifier'],
+                              ),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return Container(
+                                    color: Colors.grey[850],
+                                    child: const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+
+                                if (snapshot.hasError) {
+                                  return Container(
+                                    color: Colors.grey[850],
+                                    child: const Icon(Icons.error_outline, color: Colors.white54, size: 48),
+                                  );
+                                }
+
+                                return CachedNetworkImage(
+                                  imageUrl: snapshot.data!,
+                                  height: 200,
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.grey[850],
+                                    child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                                  ),
+                                );
+                              },
                             ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Downloaded',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                          ),
+                          // Play button overlay (visible on hover)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.black.withOpacity(0.3),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.black.withOpacity(0.6),
+                                  ),
+                                  child: const Icon(
+                                    Icons.play_arrow,
+                                    color: Colors.white,
+                                    size: 30,
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          // Show download badge if album is downloaded
+                          if (album['downloaded'] == true)
+                            Positioned(
+                              right: 10,
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.green, width: 1),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.download_done,
+                                      color: Colors.green,
+                                      size: 16,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Downloaded',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                ],
+                    // Album Info
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
+                        children: [
+                          SizedBox(
+                            height: 20, // Fixed height for title
+                            child: Text(
+                              album['title'] ?? 'Unknown',
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white,
+                                fontSize: 14, // Reduced font size
+                                fontWeight: FontWeight.w300,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(height: 2), // Reduced height
+                          SizedBox(
+                            height: 16, // Fixed height for artist
+                            child: Text(
+                              album['artist'] ?? 'Various Artists',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 12, // Reduced font size
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            // Album Info
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
-                children: [
-                  SizedBox(
-                    height: 20, // Fixed height for title
-                    child: Text(
-                      album['title'] ?? 'Unknown',
-                      style: GoogleFonts.montserrat(
-                        color: Colors.white,
-                        fontSize: 14, // Reduced font size
-                        fontWeight: FontWeight.w300,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(height: 2), // Reduced height
-                  SizedBox(
-                    height: 16, // Fixed height for artist
-                    child: Text(
-                      album['artist'] ?? 'Various Artists',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12, // Reduced font size
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 
   Widget _buildArtistCircle(Map<String, dynamic> artist) {
-    return GestureDetector(
-      onTap: () {
-        ContentViewController().navigateTo(
-          ContentType.artist,
-          data: artist,
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 24),
-        child: Column(
-          children: [
-            // Artist Image with Backblaze support
-            Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // Artist Image
-                  ClipOval(
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        artist['image_url'],
-                        artist['file_identifier'],
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.person, color: Colors.white54, size: 48),
-                          );
-                        }
-
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          width: 130,
-                          height: 130,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: Colors.grey[850],
-                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.person, color: Colors.white54, size: 48),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  // Hover overlay
-                  ClipOval(
-                    child: Container(
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool isHovering = false;
+        return MouseRegion(
+          onEnter: (_) => setState(() => isHovering = true),
+          onExit: (_) => setState(() => isHovering = false),
+          child: GestureDetector(
+            onTap: () {
+              ContentViewController().navigateTo(
+                ContentType.artist,
+                data: artist,
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              transform: Matrix4.identity()..scale(isHovering ? 1.1 : 1.0),
+              child: Container(
+                margin: const EdgeInsets.only(right: 24),
+                child: Column(
+                  children: [
+                    // Artist Image with Backblaze support
+                    Container(
                       width: 130,
                       height: 130,
-                      color: Colors.black.withOpacity(0.2),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                        ),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isHovering ? 0.4 : 0.2),
+                            blurRadius: isHovering ? 15 : 10,
+                            offset: Offset(0, isHovering ? 8 : 5),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          // Artist Image
+                          ClipOval(
+                            child: FutureBuilder<String>(
+                              future: _backblazeService.getImageUrl(
+                                artist['image_url'],
+                                artist['file_identifier'],
+                              ),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return Container(
+                                    color: Colors.grey[850],
+                                    child: const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+
+                                if (snapshot.hasError) {
+                                  return Container(
+                                    color: Colors.grey[850],
+                                    child: const Icon(Icons.person, color: Colors.white54, size: 48),
+                                  );
+                                }
+
+                                return CachedNetworkImage(
+                                  imageUrl: snapshot.data!,
+                                  width: 130,
+                                  height: 130,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    color: Colors.grey[850],
+                                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    color: Colors.grey[850],
+                                    child: const Icon(Icons.person, color: Colors.white54, size: 48),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          // Hover overlay
+                          ClipOval(
+                            child: Container(
+                              width: 130,
+                              height: 130,
+                              color: Colors.black.withOpacity(0.2),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    // Artist Name
+                    Text(
+                      artist['name'] ?? 'Unknown Artist',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            // Artist Name
-            Text(
-              artist['name'] ?? 'Unknown Artist',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 }
@@ -1147,145 +1173,149 @@ class _NewReleaseItemState extends State<NewReleaseItem> {
     return MouseRegion(
       onEnter: (event) => setState(() => _isHovering = true),
       onExit: (event) => setState(() => _isHovering = false),
-      child: SizedBox(
-        width: 200,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Album Cover with Backblaze support
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // Album Image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        widget.imageUrl,
-                        widget.fileIdentifier,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Center(
-                              child: CircularProgressIndicator(),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: Matrix4.identity()..scale(_isHovering ? 1.05 : 1.0),
+        child: SizedBox(
+          width: 200,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Album Cover with Backblaze support
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(_isHovering ? 0.4 : 0.2),
+                      blurRadius: _isHovering ? 15 : 10,
+                      offset: Offset(0, _isHovering ? 8 : 5),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    // Album Image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: FutureBuilder<String>(
+                        future: _backblazeService.getImageUrl(
+                          widget.imageUrl,
+                          widget.fileIdentifier,
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Container(
+                              color: Colors.grey[850],
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Container(
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, color: Colors.white54, size: 48),
+                            );
+                          }
+
+                          return CachedNetworkImage(
+                            imageUrl: snapshot.data!,
+                            height: 200,
+                            width: 200,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => Container(
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, color: Colors.white54, size: 48),
                             ),
                           );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
-                          );
-                        }
-
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          height: 200,
-                          width: 200,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, color: Colors.white54, size: 48),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
-                  ),
-                  // Hover overlay with play button
-                  if (_isHovering)
-                    Positioned.fill(
+                    // Hover overlay with play button
+                    if (_isHovering)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.black.withOpacity(0.3),
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withOpacity(0.6),
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    // "NEW" badge
+                    Positioned(
+                      top: 10,
+                      right: 10,
                       child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Center(
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black.withOpacity(0.6),
-                            ),
-                            child: const Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 30,
-                            ),
+                        child: const Text(
+                          'NEW',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     ),
-                  // "NEW" badge
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'NEW',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            // Album Info - more compact
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min, // Use minimum space needed
-                children: [
-                  Text(
-                    widget.title,
-                    style: GoogleFonts.montserrat(
-                      color: Colors.white,
-                      fontSize: 14, // Reduced font size
-                      fontWeight: FontWeight.w300,
+              // Album Info - more compact
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min, // Use minimum space needed
+                  children: [
+                    Text(
+                      widget.title,
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white,
+                        fontSize: 14, // Reduced font size
+                        fontWeight: FontWeight.w300,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2), // Reduced spacing
-                  Text(
-                    widget.artist,
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12, // Reduced font size
+                    const SizedBox(height: 2), // Reduced spacing
+                    Text(
+                      widget.artist,
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12, // Reduced font size
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1897,7 +1927,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: isDesktop ? 6 : 2,
-                          childAspectRatio: 0.8,
+                          childAspectRatio: 0.7,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
@@ -2140,6 +2170,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
       borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Album cover
           AspectRatio(
@@ -2159,24 +2190,30 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
           const SizedBox(height: 8),
 
           // Album title
-          Text(
-            album['title'] ?? 'Unknown Album',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          SizedBox(
+            height: 20, // Fixed height for title
+            child: Text(
+              album['title'] ?? 'Unknown Album',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
 
           // Album year
-          Text(
-            album['release_date'] ?? '',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 12,
+          SizedBox(
+            height: 16, // Fixed height for year
+            child: Text(
+              album['release_date'] ?? '',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 12,
+              ),
             ),
           ),
         ],
