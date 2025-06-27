@@ -336,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Launch OAuth flow with redirectTo pointing to the local server.
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'http://localhost:${server.port}/auth-callback',
+        redirectTo: 'http://localhost:8000/auth-callback',
       );
 
       // Wait for the OAuth callback request.
