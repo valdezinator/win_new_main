@@ -518,198 +518,202 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                 ),
               ),
 
-              // Content - Wrapped in SingleChildScrollView to handle overflow
+              // Main content: Player (left) + Lyrics (right)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 20.0),
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height - 80, // Leave space for padding
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Album art - Adjusted size based on screen height
-                          Container(
-                            width: 250,
-                            height: 250,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.5),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                widget.song['image_url'] ?? '',
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(Icons.music_note, color: Colors.white, size: 80),
-                                ),
-                              ),
-                            ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // LEFT: Player UI
+                    Expanded(
+                      flex: 10,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: 420,
+                            minWidth: 260,
                           ),
-
-                          const SizedBox(height: 30),
-
-                          // Full screen song details
-                          Text(
-                            widget.song['title'] ?? 'Unknown',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w300,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          // Artist name
-                          Text(
-                            widget.song['artist'] ?? 'Unknown Artist',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w300,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-
-                          const SizedBox(height: 40),
-
-                          // Progress bar
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center, // Center the entire row
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Flexible(
-                                child: Container(
-                                  constraints: const BoxConstraints(maxWidth: 400), // Constrain maximum width
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Current position
-                                      Text(
-                                        _formatDuration(currentPosition),
-                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
-                                      ),
-                                      const SizedBox(width: 8),
-
-                                      // Progress slider
-                                      Expanded(
-                                        child: SliderTheme(
-                                          data: SliderThemeData(
-                                            trackHeight: 2,
-                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                                            activeTrackColor: accentColor,
-                                            inactiveTrackColor: Colors.grey[800],
-                                            thumbColor: accentColor,
-                                          ),
-                                          child: Slider(
-                                            value: _safeSliderValue(currentPosition.inSeconds.toDouble(), totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0),
-                                            max: totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0,
-                                            onChanged: (value) {
-                                              _audioService.player.seek(Duration(seconds: value.toInt()));
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-
-                                      // Total duration
-                                      Text(
-                                        _formatDuration(totalDuration),
-                                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
-                                      ),
-                                    ],
+                              // Album art
+                              Container(
+                                width: 220,
+                                height: 220,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.5),
+                                      blurRadius: 20,
+                                      spreadRadius: 5,
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    widget.song['image_url'] ?? '',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(Icons.music_note, color: Colors.white, size: 80),
+                                    ),
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 24),
+                              // Song title
+                              Text(
+                                widget.song['title'] ?? 'Unknown',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w300,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 6),
+                              // Artist name
+                              Text(
+                                widget.song['artist'] ?? 'Unknown Artist',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w300,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 32),
+                              // Progress bar
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Flexible(
+                                    child: Container(
+                                      constraints: const BoxConstraints(maxWidth: 340),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            _formatDuration(currentPosition),
+                                            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: SliderTheme(
+                                              data: SliderThemeData(
+                                                trackHeight: 2,
+                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                                                activeTrackColor: accentColor,
+                                                inactiveTrackColor: Colors.grey[800],
+                                                thumbColor: accentColor,
+                                              ),
+                                              child: Slider(
+                                                value: _safeSliderValue(currentPosition.inSeconds.toDouble(), totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0),
+                                                max: totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0,
+                                                onChanged: (value) {
+                                                  _audioService.player.seek(Duration(seconds: value.toInt()));
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _formatDuration(totalDuration),
+                                            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              // Playback controls
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _buildHoverButton(
+                                    child: Icon(
+                                      Icons.shuffle,
+                                      color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
+                                      size: 22,
+                                    ),
+                                    onPressed: toggleShuffle,
+                                    padding: const EdgeInsets.all(8),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildHoverButton(
+                                    icon: Icons.skip_previous,
+                                    color: Colors.white,
+                                    onPressed: _handlePrevious,
+                                    size: 30,
+                                    padding: const EdgeInsets.all(8),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildHoverButton(
+                                    icon: isPlaying
+                                        ? Icons.pause_circle_filled
+                                        : Icons.play_circle_filled,
+                                    color: Colors.white,
+                                    onPressed: _handlePlayPause,
+                                    size: 48,
+                                    padding: const EdgeInsets.all(8),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildHoverButton(
+                                    icon: Icons.skip_next,
+                                    color: Colors.white,
+                                    onPressed: _handleNext,
+                                    size: 30,
+                                    padding: const EdgeInsets.all(8),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildHoverButton(
+                                    child: Icon(
+                                      Icons.repeat,
+                                      color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
+                                      size: 22,
+                                    ),
+                                    onPressed: toggleRepeat,
+                                    padding: const EdgeInsets.all(8),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-
-                          const SizedBox(height: 25),
-
-                          // Playback controls
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Shuffle button
-                              _buildHoverButton(
-                                child: Icon(
-                                  Icons.shuffle,
-                                  color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                  size: 24,
-                                ),
-                                onPressed: toggleShuffle,
-                                padding: const EdgeInsets.all(10),
-                              ),
-
-                              const SizedBox(width: 25),
-
-                              // Previous button
-                              _buildHoverButton(
-                                icon: Icons.skip_previous,
-                                color: Colors.white,
-                                onPressed: _handlePrevious,
-                                size: 36,
-                                padding: const EdgeInsets.all(10),
-                              ),
-
-                              const SizedBox(width: 25),
-
-                              // Play/Pause button
-                              _buildHoverButton(
-                                icon: isPlaying
-                                  ? Icons.pause_circle_filled
-                                  : Icons.play_circle_filled,
-                                color: Colors.white,
-                                onPressed: _handlePlayPause,
-                                size: 64,
-                                padding: const EdgeInsets.all(10),
-                              ),
-
-                              const SizedBox(width: 25),
-
-                              // Next button
-                              _buildHoverButton(
-                                icon: Icons.skip_next,
-                                color: Colors.white,
-                                onPressed: _handleNext,
-                                size: 36,
-                                padding: const EdgeInsets.all(10),
-                              ),
-
-                              const SizedBox(width: 25),
-
-                              // Repeat button
-                              _buildHoverButton(
-                                child: Icon(
-                                  Icons.repeat,
-                                  color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                  size: 24,
-                                ),
-                                onPressed: toggleRepeat,
-                                padding: const EdgeInsets.all(10),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 28),
+                    // RIGHT: Lyrics Panel
+                    Expanded(
+                      flex: 6,
+                      child: Container(
+                        height: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+                          child: LyricsPanel(
+                            lyrics: widget.song['song_lyrics'],
+                            translatedLyrics: widget.song['lyrics_in_eng'],
+                            onClose: () {}, // No close button in full screen
+                            currentPosition: currentPosition,
+                            totalDuration: totalDuration,
+                            accentColor: accentColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
               // Exit button
               Positioned(
                 top: 20,
