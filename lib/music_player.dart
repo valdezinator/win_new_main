@@ -808,9 +808,12 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                       ],
                     ),
                     child: isAdPlaying
-                        ? Center( // Show ad UI when ad is playing
-                            child: Stack(
-                                  alignment: Alignment.center,
+                        ? Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 32.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Text(
                                   'Advertisement',
@@ -820,13 +823,22 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                // Ad controls overlay - positioned on top
-                                Positioned(
-                                  top: 0,
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: AdControls(),
+                                const SizedBox(height: 16),
+                                AdControls(),
+                                const SizedBox(height: 16),
+                                // Fallback error message area (shown if ad fails)
+                                StreamBuilder<PlayerState>(
+                                  stream: _audioService.player.playerStateStream,
+                                  builder: (context, snapshot) {
+                                    final state = snapshot.data;
+                                    if (state != null && state.processingState == ProcessingState.idle) {
+                                      return Text(
+                                        'Ad failed to load. Resuming music...',
+                                        style: TextStyle(color: Colors.red[200], fontSize: 14),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
                                 ),
                               ],
                             ),

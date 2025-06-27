@@ -83,11 +83,10 @@ class AdManagerService {
     });
 
     try {
-      // TODO: Replace with actual ad audio URL
-      // Play the ad using the main player
+      // Use a reliable .mp3 ad audio URL
       await _mainAudioPlayer!.setAudioSource(
         AudioSource.uri(
-          Uri.parse('https://file-examples.com/storage/v1/2017/11/file_example_WAV_1MG.wav'),
+          Uri.parse('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'),
           tag: MediaItem(
             id: 'ad_${DateTime.now().millisecondsSinceEpoch}',
             title: 'Advertisement',
@@ -96,11 +95,10 @@ class AdManagerService {
         ),
       );
       await _mainAudioPlayer!.play();
-      
       // Track ad impression
       _trackAdImpression();
     } catch (e) {
-      print('Error playing ad on main player: $e');
+      print('Error playing ad on main player (ad may be unsupported or unreachable): $e');
       // If ad fails to load/play, just complete the ad process
       _onAdComplete();
       adCompletionSubscription?.cancel(); // Ensure listener is cancelled on error

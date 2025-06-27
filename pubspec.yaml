@@ -36,6 +36,7 @@ dependencies:
   permission_handler: ^11.3.0
   qr_flutter: ^4.1.0
   record: ^5.0.4
+  rename_app: ^1.6.3
   sentry_flutter: ^7.15.0
   shared_preferences: ^2.5.2
   shimmer: ^3.0.0
