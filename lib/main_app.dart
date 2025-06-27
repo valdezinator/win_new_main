@@ -28,10 +28,17 @@ class _MainAppState extends State<MainApp> {
   void initState() {
     super.initState();
     _audioService.currentSongStream.listen((song) {
+      debugPrint('[MainApp] Received song from AudioService.currentSongStream: ' + song.toString());
       setState(() {
         _currentSong = song;
       });
     });
+
+    // On app start, set _currentSong if AudioService.currentSong is not null
+    if (_audioService.currentSong != null) {
+      debugPrint('[MainApp] Setting _currentSong from AudioService.currentSong on startup: ' + _audioService.currentSong.toString());
+      _currentSong = _audioService.currentSong;
+    }
 
     // Listen for content navigation events
     ContentViewController().addListener(_handleContentNavigation);

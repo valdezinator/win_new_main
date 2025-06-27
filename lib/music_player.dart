@@ -18,6 +18,7 @@ import 'widgets/lyrics_panel.dart';
 import 'widgets/ad_controls.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/analytics_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
@@ -82,6 +83,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
+    
+    // Restore shuffle/repeat state
+    _restorePlayerPreferences();
     
     // Initialize ad service with the main audio player
     _adManager.initialize(_audioService.player);
@@ -334,6 +338,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         isRepeatEnabled = false;
       }
     });
+    _savePlayerPreferences();
   }
 
   void toggleRepeat() {
@@ -343,6 +348,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         isShuffleEnabled = false;
       }
     });
+    _savePlayerPreferences();
   }
   void toggleLyrics() {
     setState(() {
@@ -609,8 +615,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                             thumbColor: accentColor,
                                           ),
                                           child: Slider(
-                                            value: currentPosition.inSeconds.toDouble(),
-                                            max: totalDuration.inSeconds.toDouble(),
+                                            value: _safeSliderValue(currentPosition.inSeconds.toDouble(), totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0),
+                                            max: totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0,
                                             onChanged: (value) {
                                               _audioService.player.seek(Duration(seconds: value.toInt()));
                                             },
@@ -1003,8 +1009,8 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                                       thumbColor: accentColor,
                                                     ),
                                                     child: Slider(
-                                                      value: currentPosition.inSeconds.toDouble(),
-                                                      max: totalDuration.inSeconds.toDouble(),
+                                                      value: _safeSliderValue(currentPosition.inSeconds.toDouble(), totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0),
+                                                      max: totalDuration.inSeconds > 0 ? totalDuration.inSeconds.toDouble() : 1.0,
                                                       onChanged: (value) {
                                                         _audioService.player.seek(Duration(seconds: value.toInt()));
                                                       },
@@ -1146,7 +1152,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                           thumbColor: Colors.white,
                                         ),
                                         child: Slider(
-                                          value: volume,
+                                          value: volume.clamp(0.0, 1.0),
                                           onChanged: (value) {
                                             setState(() => volume = value);
                                             _audioService.player.setVolume(value);
@@ -1213,6 +1219,26 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         ),
       ),
     );
+  }
+
+  Future<void> _restorePlayerPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isShuffleEnabled = prefs.getBool('isShuffleEnabled') ?? false;
+      isRepeatEnabled = prefs.getBool('isRepeatEnabled') ?? false;
+    });
+  }
+
+  void _savePlayerPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isShuffleEnabled', isShuffleEnabled);
+    await prefs.setBool('isRepeatEnabled', isRepeatEnabled);
+  }
+
+  // Helper for safe slider values
+  double _safeSliderValue(double value, double max) {
+    if (max <= 0) return 0.0;
+    return value.clamp(0.0, max);
   }
 }
 

@@ -63,6 +63,11 @@ class AudioService {
     }
   }
 
+  // Utility to sanitize URLs
+  String sanitizeUrl(String url) {
+    return url.trim().replaceAll('\n', '').replaceAll('%0A', '');
+  }
+
   Future<void> playSong(Map<String, dynamic> song) async {
     if (song['audio_url'] == null && song['downloaded'] != true) {
       throw Exception('Cannot play song: Missing audio URL and not downloaded');
@@ -109,7 +114,7 @@ class AudioService {
                 ? processedSong['duration']
                 : int.tryParse(processedSong['duration'].toString()) ?? 0)
             : null,
-        artUri: processedSong['image_url'] != null ? Uri.parse(processedSong['image_url']) : null,
+        artUri: processedSong['image_url'] != null ? Uri.parse(sanitizeUrl(processedSong['image_url'])) : null,
       );
 
       if (isDownloaded) {
@@ -131,7 +136,7 @@ class AudioService {
           final isOnline = await _checkInternetConnection();
           if (isOnline) {
             audioSource = AudioSource.uri(
-              Uri.parse(processedSong['audio_url']),
+              Uri.parse(sanitizeUrl(processedSong['audio_url'])),
               tag: mediaItem,
             );
           } else {
@@ -145,12 +150,23 @@ class AudioService {
         }
         
         audioSource = AudioSource.uri(
-          Uri.parse(processedSong['audio_url']),
+          Uri.parse(sanitizeUrl(processedSong['audio_url'])),
           tag: mediaItem,
         );
       }
 
-      await player.setAudioSource(audioSource, initialPosition: Duration.zero);
+      // Restore last position if available
+      final prefs = await SharedPreferences.getInstance();
+      int? lastPositionMs;
+      if (_currentSong != null && _currentSong!['id'] != null) {
+        lastPositionMs = prefs.getInt('last_position_ms_${_currentSong!['id']}');
+      }
+      Duration initialPosition = Duration.zero;
+      if (lastPositionMs != null && lastPositionMs > 0) {
+        initialPosition = Duration(milliseconds: lastPositionMs);
+      }
+
+      await player.setAudioSource(audioSource, initialPosition: initialPosition);
       await player.play();
       _isPlaying = true;
       _isPlayingController.add(true);
@@ -181,9 +197,11 @@ class AudioService {
     final prefs = await SharedPreferences.getInstance();
     final songJson = prefs.getString('last_played_song');
     
+    debugPrint('[AudioService] _loadLastPlayedSong called. songJson: ' + (songJson?.substring(0, songJson.length > 200 ? 200 : songJson.length) ?? 'null'));
     if (songJson != null) {
       try {
         final song = Map<String, dynamic>.from(json.decode(songJson));
+        debugPrint('[AudioService] Restored song: ' + song.toString());
         _currentSong = song;
         _currentSongController.add(song);
 
@@ -194,15 +212,21 @@ class AudioService {
 
         if (song['audio_url'] != null) {
           final audioSource = AudioSource.uri(
-            Uri.parse(song['audio_url']),
+            Uri.parse(sanitizeUrl(song['audio_url'])),
             tag: MediaItem(
               id: song['id']?.toString() ?? '',
               title: song['title']?.toString() ?? 'Unknown',
               artist: song['artist']?.toString() ?? 'Unknown Artist',
-              artUri: song['image_url'] != null ? Uri.parse(song['image_url']) : null,
+              artUri: song['image_url'] != null ? Uri.parse(sanitizeUrl(song['image_url'])) : null,
             ),
           );
-          await player.setAudioSource(audioSource);
+          // Restore last position if available
+          int? lastPositionMs = prefs.getInt('last_position_ms_${song['id']}');
+          Duration initialPosition = Duration.zero;
+          if (lastPositionMs != null && lastPositionMs > 0) {
+            initialPosition = Duration(milliseconds: lastPositionMs);
+          }
+          await player.setAudioSource(audioSource, initialPosition: initialPosition);
           _isPlaying = false;
           _isPlayingController.add(false);
         }
@@ -363,6 +387,7 @@ class AudioService {
 
   AudioService._internal() {
     _init();
+    listenToPosition();
   }
 
   Future<void> _init() async {
@@ -511,5 +536,15 @@ class AudioService {
     } catch (e) {
       _handlePlaybackError(error: e);
     }
+  }
+
+  // Save position periodically
+  void listenToPosition() {
+    player.positionStream.listen((position) async {
+      if (_currentSong != null && _currentSong!['id'] != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('last_position_ms_${_currentSong!['id']}', position.inMilliseconds);
+      }
+    });
   }
 }
