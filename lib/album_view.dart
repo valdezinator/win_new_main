@@ -9,6 +9,7 @@ import 'services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // NEW import for caching images
 import 'package:shimmer/shimmer.dart'; // Add shimmer package
 import 'services/backblaze_service.dart'; // Import BackblazeService
+import 'services/favorites_service.dart'; // Import FavoritesService
 
 class AlbumView extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -46,6 +47,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   double _totalDownloadProgress = 0.0;
   bool _isDownloaded = false;
   Map<String, dynamic>? _currentSong; // NEW state variable
+  bool _isFavorited = false; // Add favorites state
+  bool _isFavoritesLoading = false; // Add loading state for favorites
 
   Timer? _downloadProgressTimer;
 
@@ -54,6 +57,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   late Animation<double> _fadeAnimation;
 
   final BackblazeService _backblazeService = BackblazeService(); // Add BackblazeService instance
+  final FavoritesService _favoritesService = FavoritesService(); // Add FavoritesService instance
 
   @override
   void initState() {
@@ -86,6 +90,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             });
           }
           _checkDownloadState();
+          _checkFavoriteState(); // Add favorites checking
         });
       }
     });
@@ -129,6 +134,73 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
       setState(() {
         _isDownloaded = isDownloaded;
       });
+    }
+  }
+
+  Future<void> _checkFavoriteState() async {
+    final isFavorited = await _favoritesService.isAlbumFavorited(widget.album['id'].toString());
+    if (mounted) {
+      setState(() {
+        _isFavorited = isFavorited;
+      });
+    }
+  }
+
+  Future<void> _addToFavorites() async {
+    if (_isFavoritesLoading) return;
+
+    setState(() {
+      _isFavoritesLoading = true;
+    });
+
+    try {
+      final newFavoriteState = await _favoritesService.toggleAlbumFavorite(widget.album['id'].toString());
+      
+      if (mounted) {
+        setState(() {
+          _isFavorited = newFavoriteState;
+          _isFavoritesLoading = false;
+        });
+
+        // Show feedback to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  newFavoriteState ? Icons.favorite : Icons.favorite_border,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  newFavoriteState 
+                    ? 'Added to Favorites' 
+                    : 'Removed from Favorites',
+                ),
+              ],
+            ),
+            backgroundColor: newFavoriteState ? Colors.green : Colors.grey[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFavoritesLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating favorites: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -601,6 +673,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                         const SizedBox(width: 16),
                         _buildDownloadButton(),
                         const SizedBox(width: 16),
+                        _buildFavoriteButton(),
+                        const SizedBox(width: 16),
                         _buildAlbumMoreOptionsMenu(),
                         const Spacer(), // Pushes queue button to the right
                         IconButton(
@@ -794,11 +868,11 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildMenuItem(
-                        icon: Icons.favorite_border,
-                        text: 'Add Album to Favorites',
+                        icon: _isFavorited ? Icons.favorite : Icons.favorite_border,
+                        text: _isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
                         onTap: () {
                           Navigator.pop(context);
-                          // TODO: Add album to favorites
+                          _addToFavorites();
                         },
                       ),
                       _buildMenuItem(
@@ -970,7 +1044,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                         text: 'Add to Favorites',
                         onTap: () {
                           Navigator.pop(context);
-                          // TODO: Add to favorites
+                          _addToFavorites();
                         },
                       ),
                     ],
@@ -1243,6 +1317,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                   const SizedBox(width: 16),
                   _buildDownloadButton(),
                   const SizedBox(width: 16),
+                  _buildFavoriteButton(),
+                  const SizedBox(width: 16),
                   _buildAlbumMoreOptionsMenu(),
                 ],
               ),
@@ -1477,6 +1553,26 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             onPressed: _isDownloaded ? null : _downloadAlbum,
             tooltip: _isDownloaded ? 'Downloaded' : 'Download Album',
           ),
+    );
+  }
+
+  Widget _buildFavoriteButton() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _isFavorited ? Colors.green.withOpacity(0.2) : Colors.white.withOpacity(0.1),
+      ),
+      child: IconButton(
+        icon: Icon(
+          _isFavorited ? Icons.favorite : Icons.favorite_border,
+          color: _isFavorited ? Colors.green : Colors.white70,
+          size: 24,
+        ),
+        onPressed: _addToFavorites,
+        tooltip: _isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
+      ),
     );
   }
 

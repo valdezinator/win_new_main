@@ -12,7 +12,7 @@ import 'services/payment_service.dart';
 import 'widgets/subscription_manager.dart';
 
 /// SettingsScreen: Comprehensive settings page for the music app
-/// Sections: Account, Playback, Notifications, Appearance, Privacy, About
+/// Redesigned to match Spotify Desktop layout with sidebar navigation
 class SettingsScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
   const SettingsScreen({super.key, required this.supabaseClient});
@@ -22,22 +22,20 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  // Navigation
+  int _selectedIndex = 0;
+  
   // Playback settings
   bool _crossfade = false;
   bool _gapless = false;
-  String _audioQuality = 'High';
   bool _wifiOnly = true;
-  bool _noiseAdaptiveCrossfade = false; // New setting
-  bool _offlineRouteCache = false; // New setting
+  bool _noiseAdaptiveCrossfade = false;
+  bool _offlineRouteCache = false;
 
   // Notification settings
   bool _notifyNewReleases = true;
   bool _notifyPlaylistUpdates = true;
   bool _notifyAppUpdates = true;
-
-  // Appearance settings
-  String _theme = 'System';
-  Color _accentColor = Colors.deepPurpleAccent;
 
   // Privacy
   bool _clearingCache = false;
@@ -50,7 +48,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _email;
 
   // About
-  String _appVersion = '';  @override
+  String _appVersion = '';
+
+  // Navigation items
+  final List<Map<String, dynamic>> _navigationItems = [
+    {'title': 'Account', 'icon': Icons.person_outline},
+    {'title': 'Playback', 'icon': Icons.play_circle_outline},
+    {'title': 'Notifications', 'icon': Icons.notifications_outlined},
+    {'title': 'Appearance', 'icon': Icons.palette_outlined},
+    {'title': 'Privacy', 'icon': Icons.security_outlined},
+    {'title': 'About', 'icon': Icons.info_outline},
+  ];
+
+  @override
   void initState() {
     super.initState();
     _loadSettings();
@@ -68,7 +78,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   
   // Open Premium Plans webpage in default browser
   Future<void> _openPremiumPlans() async {
-    // Use a local file path that will be created in the project directory
     final Uri url = Uri.parse('file://${Platform.isWindows ? '/' : ''}${Directory.current.path}/assets/premium_plans.html');
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -89,21 +98,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   
   // Initialize noise detection and route tracking services
   Future<void> _initializeServices() async {
-    // Initialize services
     await NoiseDetectionService().initialize();
     await RouteTrackingService().initialize();
     
-    // Apply current settings to services
     final noiseService = NoiseDetectionService();
     final routeService = RouteTrackingService();
     
     if (_noiseAdaptiveCrossfade && !noiseService.hasPermission) {
-      // Request permission if feature is enabled but permission not granted
       await noiseService.requestPermission();
     }
     
     if (_offlineRouteCache && !routeService.hasPermission) {
-      // Request permission if feature is enabled but permission not granted
       await routeService.requestPermission();
     }
   }
@@ -113,17 +118,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _crossfade = prefs.getBool('crossfade') ?? false;
       _gapless = prefs.getBool('gapless') ?? false;
-      final aq = prefs.get('audio_quality');
-      _audioQuality = (aq is String && ['Low', 'Medium', 'High', 'Lossless'].contains(aq)) ? aq : 'High';
       _wifiOnly = prefs.getBool('wifi_only') ?? true;
       _notifyNewReleases = prefs.getBool('notify_new_releases') ?? true;
       _notifyPlaylistUpdates = prefs.getBool('notify_playlist_updates') ?? true;
       _notifyAppUpdates = prefs.getBool('notify_app_updates') ?? true;
-      _theme = prefs.getString('theme') ?? 'System';
-      int? colorValue = prefs.getInt('accent_color');
-      if (colorValue != null) _accentColor = Color(colorValue);
-      _noiseAdaptiveCrossfade = prefs.getBool('noise_adaptive_crossfade') ?? false; // Load new setting
-      _offlineRouteCache = prefs.getBool('offline_route_cache') ?? false; // Load new setting
+      _noiseAdaptiveCrossfade = prefs.getBool('noise_adaptive_crossfade') ?? false;
+      _offlineRouteCache = prefs.getBool('offline_route_cache') ?? false;
     });
   }
 
@@ -151,7 +151,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _clearCache() async {
     setState(() => _clearingCache = true);
-    // Simulate cache clearing
     await Future.delayed(const Duration(seconds: 2));
     setState(() => _clearingCache = false);
     if (mounted) {
@@ -171,229 +170,588 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Colors.black,
-      ),
-      backgroundColor: const Color(0xFF181A20),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      backgroundColor: const Color(0xFF121212),
+      body: Row(
         children: [
-          // ------------------- Account Section -------------------
-          _sectionHeader('Account'),          ListTile(
-            leading: const Icon(Icons.person, color: Colors.white70),
-            title: Text(_username ?? '', style: const TextStyle(color: Colors.white)),
-            subtitle: Text(_email ?? '', style: const TextStyle(color: Colors.white54)),
-            trailing: TextButton(
-              onPressed: _signOut,
-              child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
+          // Sidebar Navigation
+          Container(
+            width: 280,
+            color: const Color(0xFF000000),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 16),
+                      const Text(
+                        'Settings',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Navigation Items
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _navigationItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _navigationItems[index];
+                      final isSelected = _selectedIndex == index;
+                      
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF282828) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListTile(
+                          leading: Icon(
+                            item['icon'],
+                            color: isSelected ? Colors.white : Colors.white70,
+                            size: 24,
+                          ),
+                          title: Text(
+                            item['title'],
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.white70,
+                              fontSize: 16,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                          onTap: () => setState(() => _selectedIndex = index),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
           
-          // ------------------- Subscription Section -------------------
-          _sectionHeader('Subscription'),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
-            child: SubscriptionManager(),
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- Playback Section -------------------
-          _sectionHeader('Playback'),
-          SwitchListTile(
-            value: _crossfade,
-            onChanged: (v) { setState(() => _crossfade = v); _saveSetting('crossfade', v); },
-            title: const Text('Crossfade', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Smoothly transition between songs'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _gapless,
-            onChanged: (v) { setState(() => _gapless = v); _saveSetting('gapless', v); },
-            title: const Text('Gapless Playback', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('No silence between tracks'),
-            activeColor: _accentColor,
-          ),
-          ListTile(
-            title: const Text('Audio Quality', style: TextStyle(color: Colors.white)),
-            subtitle: Text(_audioQuality, style: const TextStyle(color: Colors.white54)),
-            trailing: DropdownButton<String>(
-              value: _audioQuality,
-              dropdownColor: Colors.grey[900],
-              items: ['Low', 'Medium', 'High', 'Lossless']
-                  .map((q) => DropdownMenuItem(value: q, child: Text(q)))
-                  .toList(),
-              onChanged: (v) { if (v != null) { setState(() => _audioQuality = v); _saveSetting('audio_quality', v); } },
+          // Main Content Area
+          Expanded(
+            child: Container(
+              color: const Color(0xFF121212),
+              child: _buildContentArea(),
             ),
-          ),          SwitchListTile(
-            value: _wifiOnly,
-            onChanged: (v) { 
-              setState(() => _wifiOnly = v); 
-              _saveSetting('wifi_only', v); 
-              // Update route tracking service if enabled
-              if (_offlineRouteCache) {
-                RouteTrackingService().setWifiOnlyDownloads(v);
-              }
-            },
-            title: const Text('Download over Wi-Fi only', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Prevent mobile data usage'),
-            activeColor: _accentColor,
-          ),Row(
-            children: [
-              Expanded(
-                child: SwitchListTile(
-                  value: _noiseAdaptiveCrossfade,
-                  onChanged: (v) { 
-                    setState(() => _noiseAdaptiveCrossfade = v); 
-                    _saveSetting('noise_adaptive_crossfade', v); 
-                    // Initialize or disable the noise detection service
-                    NoiseDetectionService().setEnabled(v);
-                  },
-                  title: const Text('Noise Adaptive Crossfade', style: TextStyle(color: Colors.white)),
-                  subtitle: const Text('Adjust volume based on ambient noise'),
-                  activeColor: _accentColor,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.info_outline, color: Colors.white70),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => const NoiseDetectionPrivacyPolicy(),
-                  );
-                },
-              ),
-            ],
-          ),          Row(
-            children: [
-              Expanded(
-                child: SwitchListTile(
-                  value: _offlineRouteCache,
-                  onChanged: (v) { 
-                    setState(() => _offlineRouteCache = v); 
-                    _saveSetting('offline_route_cache', v); 
-                    // Initialize or disable the route tracking service
-                    RouteTrackingService().setEnabled(v);
-                    // Update WiFi only setting for route service
-                    RouteTrackingService().setWifiOnlyDownloads(_wifiOnly);
-                  },
-                  title: const Text('Offline Route Cache', style: TextStyle(color: Colors.white)),
-                  subtitle: const Text('Download music for areas with poor connectivity'),
-                  activeColor: _accentColor,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.info_outline, color: Colors.white70),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => const RouteTrackingPrivacyPolicy(),
-                  );
-                },
-              ),
-            ],
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- Notification Section -------------------
-          _sectionHeader('Notifications'),
-          SwitchListTile(
-            value: _notifyNewReleases,
-            onChanged: (v) { setState(() => _notifyNewReleases = v); _saveSetting('notify_new_releases', v); },
-            title: const Text('New Releases', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Get notified about new music'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _notifyPlaylistUpdates,
-            onChanged: (v) { setState(() => _notifyPlaylistUpdates = v); _saveSetting('notify_playlist_updates', v); },
-            title: const Text('Playlist Updates', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Updates to your playlists'),
-            activeColor: _accentColor,
-          ),
-          SwitchListTile(
-            value: _notifyAppUpdates,
-            onChanged: (v) { setState(() => _notifyAppUpdates = v); _saveSetting('notify_app_updates', v); },
-            title: const Text('App Updates', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Important news and updates'),
-            activeColor: _accentColor,
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- Appearance Section -------------------
-          _sectionHeader('Appearance'),
-          ListTile(
-            title: const Text('Theme', style: TextStyle(color: Colors.white)),
-            trailing: DropdownButton<String>(
-              value: _theme,
-              dropdownColor: Colors.grey[900],
-              items: ['System', 'Dark', 'Light']
-                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                  .toList(),
-              onChanged: (v) { if (v != null) { setState(() => _theme = v); _saveSetting('theme', v); } },
-            ),
-          ),
-          ListTile(
-            title: const Text('Accent Color', style: TextStyle(color: Colors.white)),
-            trailing: GestureDetector(
-              onTap: _pickAccentColor,
-              child: CircleAvatar(backgroundColor: _accentColor, radius: 14),
-            ),
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- Privacy Section -------------------
-          _sectionHeader('Privacy'),
-          ListTile(
-            title: const Text('Clear Cache', style: TextStyle(color: Colors.white)),
-            trailing: _clearingCache
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                : IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: _clearCache,
-                  ),
-          ),
-          ListTile(
-            title: const Text('Manage Data', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('View or delete your data'),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
-            onTap: () {
-              // TODO: Implement data management
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Data management coming soon!')),
-              );
-            },
-          ),
-          const Divider(color: Colors.white24),
-
-          // ------------------- About Section -------------------
-          _sectionHeader('About'),
-          ListTile(
-            title: const Text('App Version', style: TextStyle(color: Colors.white)),
-            subtitle: Text(_appVersion, style: const TextStyle(color: Colors.white54)),
-          ),
-          ListTile(
-            title: const Text('Licenses', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
-            onTap: () => showLicensePage(context: context),
           ),
         ],
       ),
     );
   }
 
-  // Helper for section headers
-  Widget _sectionHeader(String title) {
+  Widget _buildContentArea() {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildAccountSection();
+      case 1:
+        return _buildPlaybackSection();
+      case 2:
+        return _buildNotificationsSection();
+      case 3:
+        return _buildAppearanceSection();
+      case 4:
+        return _buildPrivacySection();
+      case 5:
+        return _buildAboutSection();
+      default:
+        return _buildAccountSection();
+    }
+  }
+
+  Widget _buildAccountSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Account'),
+          const SizedBox(height: 24),
+          
+          // User Profile Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: const Color(0xFF1DB954),
+                  child: Text(
+                    (_username?.isNotEmpty == true ? _username![0].toUpperCase() : 'U'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _username ?? 'User',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _email ?? '',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _signOut,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text('Sign out'),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          _buildSectionHeader('Subscription'),
+          const SizedBox(height: 16),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const SubscriptionManager(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaybackSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Playback'),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _buildSwitchTile(
+                  'Crossfade',
+                  'Smoothly transition between songs',
+                  _crossfade,
+                  (value) {
+                    setState(() => _crossfade = value);
+                    _saveSetting('crossfade', value);
+                  },
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  'Gapless Playback',
+                  'No silence between tracks',
+                  _gapless,
+                  (value) {
+                    setState(() => _gapless = value);
+                    _saveSetting('gapless', value);
+                  },
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  'Download over Wi-Fi only',
+                  'Prevent mobile data usage',
+                  _wifiOnly,
+                  (value) {
+                    setState(() => _wifiOnly = value);
+                    _saveSetting('wifi_only', value);
+                    if (_offlineRouteCache) {
+                      RouteTrackingService().setWifiOnlyDownloads(value);
+                    }
+                  },
+                ),
+                _buildDivider(),
+                _buildSwitchTileWithInfo(
+                  'Noise Adaptive Crossfade',
+                  'Adjust volume based on ambient noise',
+                  _noiseAdaptiveCrossfade,
+                  (value) {
+                    setState(() => _noiseAdaptiveCrossfade = value);
+                    _saveSetting('noise_adaptive_crossfade', value);
+                    NoiseDetectionService().setEnabled(value);
+                  },
+                  () => showDialog(
+                    context: context,
+                    builder: (context) => const NoiseDetectionPrivacyPolicy(),
+                  ),
+                ),
+                _buildDivider(),
+                _buildSwitchTileWithInfo(
+                  'Offline Route Cache',
+                  'Download music for areas with poor connectivity',
+                  _offlineRouteCache,
+                  (value) {
+                    setState(() => _offlineRouteCache = value);
+                    _saveSetting('offline_route_cache', value);
+                    RouteTrackingService().setEnabled(value);
+                    RouteTrackingService().setWifiOnlyDownloads(_wifiOnly);
+                  },
+                  () => showDialog(
+                    context: context,
+                    builder: (context) => const RouteTrackingPrivacyPolicy(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationsSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Notifications'),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _buildSwitchTile(
+                  'New Releases',
+                  'Get notified about new music',
+                  _notifyNewReleases,
+                  (value) {
+                    setState(() => _notifyNewReleases = value);
+                    _saveSetting('notify_new_releases', value);
+                  },
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  'Playlist Updates',
+                  'Updates to your playlists',
+                  _notifyPlaylistUpdates,
+                  (value) {
+                    setState(() => _notifyPlaylistUpdates = value);
+                    _saveSetting('notify_playlist_updates', value);
+                  },
+                ),
+                _buildDivider(),
+                _buildSwitchTile(
+                  'App Updates',
+                  'Important news and updates',
+                  _notifyAppUpdates,
+                  (value) {
+                    setState(() => _notifyAppUpdates = value);
+                    _saveSetting('notify_app_updates', value);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppearanceSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Appearance'),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _buildListTile(
+                  'Accent Color',
+                  'Customize the app\'s accent color',
+                  Icons.palette_outlined,
+                  onTap: _pickAccentColor,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacySection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Privacy'),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _buildListTile(
+                  'Clear Cache',
+                  'Free up storage space',
+                  Icons.delete_outline,
+                  trailing: _clearingCache
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                  onTap: _clearCache,
+                ),
+                _buildDivider(),
+                _buildListTile(
+                  'Manage Data',
+                  'View or delete your data',
+                  Icons.data_usage_outlined,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Data management coming soon!')),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('About'),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF282828),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _buildListTile(
+                  'App Version',
+                  _appVersion,
+                  Icons.info_outline,
+                ),
+                _buildDivider(),
+                _buildListTile(
+                  'Licenses',
+                  'View third-party licenses',
+                  Icons.description_outlined,
+                  onTap: () => showLicensePage(context: context),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF1DB954),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitchTileWithInfo(String title, String subtitle, bool value, ValueChanged<bool> onChanged, VoidCallback onInfoTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white70, size: 20),
+            onPressed: onInfoTap,
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF1DB954),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListTile(String title, String subtitle, IconData icon, {Widget? trailing, VoidCallback? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white70, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing,
+              if (onTap != null) const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Divider(color: Color(0xFF404040), height: 1),
     );
   }
 
@@ -403,7 +761,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: Colors.grey[900],
+          backgroundColor: const Color(0xFF282828),
           title: const Text('Pick Accent Color', style: TextStyle(color: Colors.white)),
           content: Wrap(
             spacing: 10,
@@ -425,7 +783,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
     );
     if (picked != null) {
-      setState(() => _accentColor = picked);
       _saveSetting('accent_color', picked.value);
     }
   }

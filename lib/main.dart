@@ -116,15 +116,21 @@ class CustomWindowListener extends WindowListener {
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize ad Service
-  await AdManagerService().initialize(_audioService.player);
 
   // Initialize SecurityService
   await SecurityService().initialize();
   
   // Load environment variables
   await loadEnv();
+
+  // Initialize Supabase using environment variables FIRST
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
+  // Initialize ad Service AFTER Supabase
+  await AdManagerService().initialize(_audioService.player);
 
   // Initialize window manager for Windows
   if (Platform.isWindows) {
@@ -172,12 +178,6 @@ Future<void> main() async {
   
   // Listen to window state changes
   windowManager.addListener(CustomWindowListener(analyticsService));
-
-  // Initialize Supabase using environment variables
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
 
   runApp(const MyApp());
 }

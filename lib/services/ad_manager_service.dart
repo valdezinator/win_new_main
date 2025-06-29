@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'audio_service.dart'; // Import AudioService
+import 'listening_time_service.dart'; // Import ListeningTimeService
 
 class AdManagerService {
   static final AdManagerService _instance = AdManagerService._internal();
@@ -23,30 +25,73 @@ class AdManagerService {
   Uri? _currentSongUri;
   Object? _currentSongTag;
 
+  // Listening time service
+  final ListeningTimeService _listeningTimeService = ListeningTimeService();
+  StreamSubscription? _adEligibilitySubscription;
+  bool _isAdEligible = false;
+
   // Ad state
   bool get isAdPlaying => _isAdPlaying;
   bool get canSkip => _canSkip;
+  bool get isAdEligible => _isAdEligible;
   
   // Initialize the service with the main audio player
   Future<void> initialize(AudioPlayer mainPlayer) async {
     _mainAudioPlayer = mainPlayer;
-    // The ad playback will use the main player, no need to set loop mode here.
-    // We will add listeners to the main player's state in playAd.
+    
+    // Initialize listening time service
+    await _listeningTimeService.initialize();
+    
+    // Listen for ad eligibility changes
+    _adEligibilitySubscription = _listeningTimeService.adEligibilityStream.listen((eligible) {
+      _isAdEligible = eligible;
+      if (eligible) {
+        // User has reached 10 minutes - start ad timer
+        startAdTimer();
+      } else {
+        // User hasn't reached 10 minutes - stop ad timer
+        stopAdTimer();
+      }
+    });
+    
+    // Check initial eligibility
+    _isAdEligible = _listeningTimeService.canShowAds();
+    if (_isAdEligible) {
+      startAdTimer();
+    }
   }
 
-  // Start the ad timer
+  // Start the ad timer (only if user is eligible)
   void startAdTimer() {
+    if (!_isAdEligible) {
+      debugPrint('Ad timer not started - user has not reached 10 minutes of listening time');
+      return;
+    }
+    
     _adTimer?.cancel();
     _adTimer = Timer(Duration(minutes: AD_INTERVAL_MINUTES), () {
-      if (!_isAdPlaying) {
+      if (!_isAdPlaying && _isAdEligible) {
         playAd();
       }
     });
+    debugPrint('Ad timer started - ads will play every $AD_INTERVAL_MINUTES minutes');
   }
 
-  // Play an ad
+  // Stop the ad timer
+  void stopAdTimer() {
+    _adTimer?.cancel();
+    _adTimer = null;
+    debugPrint('Ad timer stopped');
+  }
+
+  // Play an ad (only if user is eligible)
   Future<void> playAd() async {
-    if (_isAdPlaying || _mainAudioPlayer == null) return;
+    if (_isAdPlaying || _mainAudioPlayer == null || !_isAdEligible) {
+      if (!_isAdEligible) {
+        debugPrint('Ad not played - user has not reached 10 minutes of listening time');
+      }
+      return;
+    }
 
     _isAdPlaying = true;
     _canSkip = false;
@@ -139,7 +184,10 @@ class AdManagerService {
        _currentSongTag = null; // Clear stored tag
     }
     
-    startAdTimer(); // Restart the ad timer for the next interval
+    // Restart the ad timer for the next interval (only if still eligible)
+    if (_isAdEligible) {
+      startAdTimer();
+    }
   }
 
   // Track ad impression
@@ -172,11 +220,42 @@ class AdManagerService {
     };
   }
 
+  // Get listening time information
+  int getTodayListeningMinutes() {
+    return _listeningTimeService.todayListeningMinutes;
+  }
+
+  String getFormattedListeningTime() {
+    return _listeningTimeService.getFormattedListeningTime();
+  }
+
+  double getProgressTowardsAds() {
+    return _listeningTimeService.getProgressTowardsAds();
+  }
+
+  int getMinutesUntilAds() {
+    return _listeningTimeService.getMinutesUntilAds();
+  }
+
+  // Refresh listening time (useful when app resumes)
+  Future<void> refreshListeningTime() async {
+    await _listeningTimeService.refreshListeningTime();
+  }
+
   // Dispose resources
   void dispose() {
     _adTimer?.cancel();
     _skipTimer?.cancel();
+    _adEligibilitySubscription?.cancel();
     // No _adPlayer to dispose
     // Do NOT dispose _mainAudioPlayer here as it's managed by AudioService
+  }
+
+  // Stop the current ad if playing
+  void stopAd() {
+    if (_isAdPlaying && _mainAudioPlayer != null) {
+      _mainAudioPlayer!.stop();
+      _onAdComplete();
+    }
   }
 } 

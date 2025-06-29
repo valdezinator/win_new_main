@@ -20,77 +20,62 @@ class AdControls extends StatelessWidget {
         }
 
         return Container(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(8.0),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 4.0,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            color: Theme.of(context).colorScheme.surface.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4.0),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
           ),
-          child: Column(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Advertisement',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
+              StreamBuilder<bool>(
+                stream: Stream.periodic(const Duration(milliseconds: 100))
+                    .map((_) => _adManager.canSkip),
+                initialData: false,
+                builder: (context, snapshot) {
+                  final canSkip = snapshot.data ?? false;
+                  return TextButton(
+                    onPressed: canSkip ? () => _adManager.skipAd() : null,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
+                    child: Text(
+                      canSkip ? 'Skip Ad' : 'Ad in Progress',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: canSkip
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.volume_up, size: 16),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                    onPressed: () {
+                      // TODO: Implement volume control
+                    },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.settings, size: 16),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                     onPressed: () {
-                      // TODO: Implement ad close functionality
+                      // TODO: Show ad preferences dialog
                     },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8.0),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  StreamBuilder<bool>(
-                    stream: Stream.periodic(const Duration(milliseconds: 100))
-                        .map((_) => _adManager.canSkip),
-                    initialData: false,
-                    builder: (context, snapshot) {
-                      final canSkip = snapshot.data ?? false;
-                      return TextButton(
-                        onPressed: canSkip ? () => _adManager.skipAd() : null,
-                        child: Text(
-                          canSkip ? 'Skip Ad' : 'Ad in Progress',
-                          style: TextStyle(
-                            color: canSkip
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.volume_up),
-                        onPressed: () {
-                          // TODO: Implement volume control
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings),
-                        onPressed: () {
-                          // TODO: Show ad preferences dialog
-                        },
-                      ),
-                    ],
                   ),
                 ],
               ),

@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
+import '../services/payment_processor.dart';
 
 class SubscriptionManager extends StatefulWidget {
   const SubscriptionManager({Key? key}) : super(key: key);
@@ -44,7 +44,73 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       await _paymentService.initialize();
 
       // Load available plans
-      final plans = await _paymentService.getAvailablePlans();
+      List<PremiumPlan> plans = [];
+      try {
+        plans = await _paymentService.getAvailablePlans();
+      } catch (e) {
+        debugPrint('Error getting available plans: $e');
+        // If we can't get plans from the database, use demo plans
+        plans = [
+          PremiumPlan(
+            id: 'monthly_premium',
+            name: 'Premium Monthly',
+            description: 'Unlimited access to all premium features with monthly billing',
+            price: 9.99,
+            currency: 'USD',
+            billingInterval: BillingInterval.monthly,
+            includedFeatures: [
+              PremiumFeature(
+                id: 'offline',
+                name: 'Offline Listening',
+                description: 'Download music for offline listening',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'hq_audio',
+                name: 'High-Quality Audio',
+                description: 'Stream in high-quality up to 320kbps',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'no_ads',
+                name: 'Ad-Free',
+                description: 'Enjoy music without interruptions',
+                tier: FeatureTier.premium,
+              ),
+            ],
+            isActive: true,
+          ),
+          PremiumPlan(
+            id: 'yearly_premium',
+            name: 'Premium Yearly',
+            description: 'Unlimited access to all premium features with yearly billing (2 months free)',
+            price: 99.99,
+            currency: 'USD',
+            billingInterval: BillingInterval.yearly,
+            includedFeatures: [
+              PremiumFeature(
+                id: 'offline',
+                name: 'Offline Listening',
+                description: 'Download music for offline listening',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'hq_audio',
+                name: 'High-Quality Audio',
+                description: 'Stream in high-quality up to 320kbps',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'no_ads',
+                name: 'Ad-Free',
+                description: 'Enjoy music without interruptions',
+                tier: FeatureTier.premium,
+              ),
+            ],
+            isActive: true,
+          ),
+        ];
+      }
 
       // Update state with loaded data
       if (mounted) {
@@ -56,12 +122,16 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
         });
       }
     } catch (e) {
+      debugPrint('Error loading subscription data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading subscription data: $e')),
+          SnackBar(
+            content: Text('Error loading subscription data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

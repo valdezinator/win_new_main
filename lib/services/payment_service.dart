@@ -427,20 +427,20 @@ class PremiumPlan {
     if (json['included_features'] != null) {
       for (final featureData in json['included_features']) {
         features.add(PremiumFeature(
-          id: featureData['id'],
-          name: featureData['name'],
-          description: featureData['description'],
+          id: featureData['id'] ?? '',
+          name: featureData['name'] ?? '',
+          description: featureData['description'] ?? '',
           tier: _parseFeatureTier(featureData['tier']),
         ));
       }
     }
     
     return PremiumPlan(
-      id: json['id'],
-      name: json['name'],
-      description: json['description'],
-      price: json['price'].toDouble(),
-      currency: json['currency'],
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      description: json['description'] ?? '',
+      price: (json['price'] ?? 0.0).toDouble(),
+      currency: json['currency'] ?? 'USD',
       billingInterval: _parseBillingInterval(json['billing_interval']),
       includedFeatures: features,
       isActive: json['is_active'] ?? true,
@@ -486,8 +486,11 @@ class PremiumPlan {
   }
   
   /// Parse billing interval from string
-  static BillingInterval _parseBillingInterval(String interval) {
-    switch (interval.toLowerCase()) {
+  static BillingInterval _parseBillingInterval(dynamic interval) {
+    if (interval == null) return BillingInterval.monthly;
+    
+    final intervalStr = interval.toString().toLowerCase();
+    switch (intervalStr) {
       case 'monthly':
         return BillingInterval.monthly;
       case 'yearly':
@@ -502,8 +505,11 @@ class PremiumPlan {
   }
   
   /// Parse feature tier from string
-  static FeatureTier _parseFeatureTier(String tier) {
-    switch (tier.toLowerCase()) {
+  static FeatureTier _parseFeatureTier(dynamic tier) {
+    if (tier == null) return FeatureTier.premium;
+    
+    final tierStr = tier.toString().toLowerCase();
+    switch (tierStr) {
       case 'free':
         return FeatureTier.free;
       case 'basic':

@@ -138,14 +138,14 @@ class _QueueListState extends State<QueueList> {
                   placeholder: (context, url) => Container(
                     width: 48,
                     height: 48,
-                    color: Theme.of(context).colorScheme.surfaceVariant,
-                    child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    color: Colors.grey[900],
+                    child: Icon(Icons.music_note, color: Colors.white24),
                   ),
                   errorWidget: (context, url, error) => Container(
                     width: 48,
                     height: 48,
-                    color: Theme.of(context).colorScheme.surfaceVariant,
-                    child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    color: Colors.grey[900],
+                    child: Icon(Icons.music_note, color: Colors.white24),
                   ),
                 ),
               ),
@@ -158,7 +158,7 @@ class _QueueListState extends State<QueueList> {
                     Text(
                       title,
                       style: TextStyle(
-                        color: isCurrentSong ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                        color: isCurrentSong ? Colors.white : Colors.white70,
                         fontSize: 14,
                         fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
                       ),
@@ -168,7 +168,7 @@ class _QueueListState extends State<QueueList> {
                     Text(
                       artist,
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: Colors.white54,
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -178,7 +178,7 @@ class _QueueListState extends State<QueueList> {
                 ),
               ),
               if (isCurrentSong)
-                Icon(Icons.volume_up, color: Theme.of(context).colorScheme.primary, size: 20),
+                Icon(Icons.volume_up, color: Colors.white, size: 20),
             ],
           ),
         ),
@@ -402,7 +402,7 @@ class _QueueListState extends State<QueueList> {
                     'Now Playing',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Colors.white70, // Changed to white70
+                      color: Colors.white70,
                     ),
                   ),
                 ),
@@ -422,7 +422,7 @@ class _QueueListState extends State<QueueList> {
                     'Next Up',
                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Colors.white70, // Changed to white70
+                      color: Colors.white70,
                     ),
                   ),
                 ),
@@ -447,7 +447,7 @@ class _QueueListState extends State<QueueList> {
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
                         'No songs up next.',
-                        style: TextStyle(color: Colors.grey[300]), // Changed to a lighter grey
+                        style: TextStyle(color: Colors.white38),
                       ),
                     ),
                   ),
@@ -461,7 +461,7 @@ class _QueueListState extends State<QueueList> {
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
                         'Queue is empty.',
-                        style: TextStyle(color: Colors.grey[300]), // Changed to a lighter grey
+                        style: TextStyle(color: Colors.white38),
                       ),
                     ),
                   ),

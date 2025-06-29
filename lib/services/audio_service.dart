@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'download_service.dart';
+import 'ad_manager_service.dart';
 
 /// Error types for better handling
 enum PlaybackError {
@@ -69,6 +70,13 @@ class AudioService {
   }
 
   Future<void> playSong(Map<String, dynamic> song) async {
+    print('[AudioService] playSong called for song id: \'${song['id']}\'');
+    // Always stop any ad playback before playing a new song
+    try {
+      AdManagerService().stopAd();
+    } catch (e) {
+      print('[AudioService] Error stopping ad: $e');
+    }
     if (song['audio_url'] == null && song['downloaded'] != true) {
       throw Exception('Cannot play song: Missing audio URL and not downloaded');
     }

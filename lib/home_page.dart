@@ -6,6 +6,7 @@ import 'album_view.dart';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'services/dynamic_playlist_service.dart';
+import 'services/listening_time_service.dart';
 import 'library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sign_in.dart';
@@ -47,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final AudioService _audioService = AudioService();
   final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
   final BackblazeService _backblazeService = BackblazeService();
+  final ListeningTimeService _listeningTimeService = ListeningTimeService();
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -63,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeLastPlayedSong();
     _initializeJamSessionService();
     _initializeDynamicPlaylistService();
+    _initializeListeningTimeService();
 
     // Debug: Check authentication state
     final user = supabaseClient.auth.currentUser;
@@ -80,6 +83,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (userId != null) {
       await JamSessionService().initialize(userId);
     }
+  }
+
+  // Initialize listening time service
+  void _initializeListeningTimeService() async {
+    await _listeningTimeService.initialize();
   }
 
   StreamSubscription? _audioSubscription;
@@ -626,18 +634,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.white,
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to see all hits
-                  },
-                  child: Text(
-                    'See All',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ),
+                // TextButton(
+                //   onPressed: () {
+                //     // Navigate to see all hits
+                //   },
+                //   child: Text(
+                //     'See All',
+                //     style: TextStyle(
+                //       fontSize: 14,
+                //       color: Colors.grey[400],
+                //     ),
+                //   ),
+                // ),
               ],
             ),
             const SizedBox(height: 16),
@@ -672,18 +680,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.white,
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to see all new releases
-                  },
-                  child: Text(
-                    'See All',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ),
+                // TextButton(
+                //   onPressed: () {
+                //     // Navigate to see all new releases
+                //   },
+                //   child: Text(
+                //     'See All',
+                //     style: TextStyle(
+                //       fontSize: 14,
+                //       color: Colors.grey[400],
+                //     ),
+                //   ),
+                // ),
               ],
             ),
             const SizedBox(height: 16),
@@ -800,18 +808,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.white,
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to see all artists
-                  },
-                  child: Text(
-                    'See All',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                ),
+                // TextButton(
+                //   onPressed: () {
+                //     // Navigate to see all artists
+                //   },
+                //   child: Text(
+                //     'See All',
+                //     style: TextStyle(
+                //       fontSize: 14,
+                //       color: Colors.grey[400],
+                //     ),
+                //   ),
+                // ),
               ],
             ),
             const SizedBox(height: 16),
@@ -1884,20 +1892,20 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage> {
                   ),
 
                   // See more button
-                  Center(
-                    child: TextButton(
-                      onPressed: () {
-                        // Show all tracks
-                      },
-                      child: Text(
-                        'See more',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
+                  // Center(
+                  //   child: TextButton(
+                  //     onPressed: () {
+                  //       // Show all tracks
+                  //     },
+                  //     child: Text(
+                  //       'See more',
+                  //       style: TextStyle(
+                  //         color: Colors.grey[400],
+                  //         fontSize: 14,
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
 
                   const SizedBox(height: 48),
 

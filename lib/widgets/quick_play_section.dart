@@ -66,18 +66,18 @@ class _QuickPlaySectionState extends State<QuickPlaySection> {
                 color: Colors.white,
               ),
             ),
-            TextButton(
-              onPressed: () {
-                // Navigate to see all quick play songs
-              },
-              child: Text(
-                'See All',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[400],
-                ),
-              ),
-            ),
+            // TextButton(
+            //   onPressed: () {
+            //     // Navigate to see all quick play songs
+            //   },
+            //   child: Text(
+            //     'See All',
+            //     style: TextStyle(
+            //       fontSize: 14,
+            //       color: Colors.grey[400],
+            //     ),
+            //   ),
+            // ),
           ],
         ),
         const SizedBox(height: 16),

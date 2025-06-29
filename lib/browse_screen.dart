@@ -40,6 +40,16 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   final BackblazeService _backblazeService = BackblazeService();
   final AnalyticsService _analyticsService = AnalyticsService();
 
+  // Browse content data
+  List<Map<String, dynamic>> featuredAlbums = [];
+  List<Map<String, dynamic>> recentlyPlayed = [];
+  List<Map<String, dynamic>> topCharts = [];
+  List<Map<String, dynamic>> newReleases = [];
+  List<Map<String, dynamic>> trendingArtists = [];
+  List<Map<String, dynamic>> popularPlaylists = [];
+  List<Map<String, dynamic>> genres = [];
+  Map<String, List<Map<String, dynamic>>> genreAlbums = {};
+
   // Tab controller for the search results tabs
   // late TabController _tabController;
   // int _selectedTabIndex = 0;
@@ -63,7 +73,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     //     });
     //   }
     // });
-    _loadAlbums();
+    _loadBrowseContent();
     // Initialize current playing index if a song is playing
     if (widget.currentlyPlayingSong != null) {
       _updateCurrentPlayingIndex();
@@ -79,6 +89,38 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  Future<void> _loadBrowseContent() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // Load all data in parallel
+      await Future.wait([
+        _loadAlbums(),
+        _loadFeaturedAlbums(),
+        _loadRecentlyPlayed(),
+        _loadTopCharts(),
+        _loadNewReleases(),
+        _loadTrendingArtists(),
+        _loadPopularPlaylists(),
+        _loadGenres(),
+      ]);
+
+      // Load genre-specific albums after genres are loaded
+      await _loadGenreAlbums();
+
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading browse content: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   Future<void> _loadAlbums() async {
     try {
       final response = await widget.supabaseClient
@@ -88,13 +130,176 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
       setState(() {
         albums = List<Map<String, dynamic>>.from(response);
-        isLoading = false;
       });
     } catch (e) {
-      //print('Error loading albums: $e');
+      print('Error loading albums: $e');
+    }
+  }
+
+  Future<void> _loadFeaturedAlbums() async {
+    try {
+      final response = await widget.supabaseClient
+          .from('albums')
+          .select()
+          .eq('featured', true)
+          .order('created_at', ascending: false)
+          .limit(10);
+
       setState(() {
-        isLoading = false;
+        featuredAlbums = List<Map<String, dynamic>>.from(response);
       });
+    } catch (e) {
+      print('Error loading featured albums: $e');
+    }
+  }
+
+  Future<void> _loadRecentlyPlayed() async {
+    try {
+      // For now, we'll use the most recent albums as recently played
+      // In a real app, this would come from user listening history
+      final response = await widget.supabaseClient
+          .from('albums')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(8);
+
+      setState(() {
+        recentlyPlayed = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      print('Error loading recently played: $e');
+    }
+  }
+
+  Future<void> _loadTopCharts() async {
+    try {
+      // For now, we'll use albums with the most songs as top charts
+      // In a real app, this would be based on actual play counts
+      final response = await widget.supabaseClient
+          .from('albums')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(6);
+
+      setState(() {
+        topCharts = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      print('Error loading top charts: $e');
+    }
+  }
+
+  Future<void> _loadNewReleases() async {
+    try {
+      final response = await widget.supabaseClient
+          .from('albums')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(8);
+
+      setState(() {
+        newReleases = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      print('Error loading new releases: $e');
+    }
+  }
+
+  Future<void> _loadTrendingArtists() async {
+    try {
+      final response = await widget.supabaseClient
+          .from('artists')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(6);
+
+      setState(() {
+        trendingArtists = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      print('Error loading trending artists: $e');
+    }
+  }
+
+  Future<void> _loadPopularPlaylists() async {
+    try {
+      // For now, we'll create mock playlists
+      // In a real app, this would come from a playlists table
+      setState(() {
+        popularPlaylists = [
+          {
+            'id': '1',
+            'title': 'Today\'s Top Hits',
+            'description': 'The hottest tracks right now',
+            'image_url': null,
+            'track_count': 50,
+          },
+          {
+            'id': '2',
+            'title': 'Chill Vibes',
+            'description': 'Relaxing music for your day',
+            'image_url': null,
+            'track_count': 35,
+          },
+          {
+            'id': '3',
+            'title': 'Workout Mix',
+            'description': 'High energy tracks for your workout',
+            'image_url': null,
+            'track_count': 40,
+          },
+          {
+            'id': '4',
+            'title': 'Late Night',
+            'description': 'Perfect for late night listening',
+            'image_url': null,
+            'track_count': 30,
+          },
+        ];
+      });
+    } catch (e) {
+      print('Error loading popular playlists: $e');
+    }
+  }
+
+  Future<void> _loadGenres() async {
+    try {
+      // For now, we'll create mock genres
+      // In a real app, this would come from a genres table
+      setState(() {
+        genres = [
+          {'id': '1', 'name': 'Pop', 'color': Colors.pink},
+          {'id': '2', 'name': 'Rock', 'color': Colors.red},
+          {'id': '3', 'name': 'Hip Hop', 'color': Colors.orange},
+          {'id': '4', 'name': 'Electronic', 'color': Colors.purple},
+          {'id': '5', 'name': 'Jazz', 'color': Colors.blue},
+          {'id': '6', 'name': 'Classical', 'color': Colors.indigo},
+          {'id': '7', 'name': 'Country', 'color': Colors.green},
+          {'id': '8', 'name': 'R&B', 'color': Colors.teal},
+        ];
+      });
+    } catch (e) {
+      print('Error loading genres: $e');
+    }
+  }
+
+  Future<void> _loadGenreAlbums() async {
+    try {
+      for (var genre in genres) {
+        // For now, we'll use random albums for each genre
+        // In a real app, this would be filtered by actual genre tags
+        final response = await widget.supabaseClient
+            .from('albums')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(6);
+
+        setState(() {
+          genreAlbums[genre['name']] = List<Map<String, dynamic>>.from(response);
+        });
+      }
+    } catch (e) {
+      print('Error loading genre albums: $e');
     }
   }
 
@@ -771,11 +976,677 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   Widget _buildBrowseContent() {
-    // This would be the content shown when no search is active
-    return const Center(
-      child: Text(
-        'Browse content will appear here',
-        style: TextStyle(color: Colors.white, fontSize: 16),
+    if (isLoading) {
+      return _buildShimmerLoader();
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Section
+          _buildWelcomeSection(),
+          const SizedBox(height: 32),
+
+          // Featured Albums
+          if (featuredAlbums.isNotEmpty) ...[
+            _buildSectionHeader('Featured Albums'),
+            const SizedBox(height: 16),
+            _buildAlbumGrid(featuredAlbums),
+            const SizedBox(height: 32),
+          ],
+
+          // Recently Played
+          if (recentlyPlayed.isNotEmpty) ...[
+            _buildSectionHeader('Recently Played'),
+            const SizedBox(height: 16),
+            _buildAlbumGrid(recentlyPlayed),
+            const SizedBox(height: 32),
+          ],
+
+          // Top Charts
+          if (topCharts.isNotEmpty) ...[
+            _buildSectionHeader('Top Charts'),
+            const SizedBox(height: 16),
+            _buildTopChartsSection(),
+            const SizedBox(height: 32),
+          ],
+
+          // New Releases
+          if (newReleases.isNotEmpty) ...[
+            _buildSectionHeader('New Releases'),
+            const SizedBox(height: 16),
+            _buildAlbumGrid(newReleases),
+            const SizedBox(height: 32),
+          ],
+
+          // Trending Artists
+          if (trendingArtists.isNotEmpty) ...[
+            _buildSectionHeader('Trending Artists'),
+            const SizedBox(height: 16),
+            _buildArtistGrid(trendingArtists),
+            const SizedBox(height: 32),
+          ],
+
+          // Popular Playlists
+          if (popularPlaylists.isNotEmpty) ...[
+            _buildSectionHeader('Popular Playlists'),
+            const SizedBox(height: 16),
+            _buildPlaylistGrid(popularPlaylists),
+            const SizedBox(height: 32),
+          ],
+
+          // Browse by Genre
+          if (genres.isNotEmpty) ...[
+            _buildSectionHeader('Browse by Genre'),
+            const SizedBox(height: 16),
+            _buildGenreGrid(),
+            const SizedBox(height: 32),
+          ],
+
+          // Genre-specific sections
+          ...genres.map((genre) {
+            final genreAlbumsList = genreAlbums[genre['name']] ?? [];
+            if (genreAlbumsList.isNotEmpty) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('${genre['name']} Music'),
+                  const SizedBox(height: 16),
+                  _buildAlbumGrid(genreAlbumsList),
+                  const SizedBox(height: 32),
+                ],
+              );
+            }
+            return const SizedBox.shrink();
+          }),
+
+          const SizedBox(height: 100), // Space for player
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWelcomeSection() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF1DB954),
+            const Color(0xFF1ed760),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Good ${_getGreeting()}!',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Discover new music and explore your favorite artists',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(40),
+            ),
+            child: const Icon(
+              Icons.music_note,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildAlbumGrid(List<Map<String, dynamic>> albums) {
+    return SizedBox(
+      height: 200,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: albums.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (context, index) => _buildBrowseAlbumCard(albums[index]),
+      ),
+    );
+  }
+
+  Widget _buildBrowseAlbumCard(Map<String, dynamic> album) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _navigateToAlbum(album),
+        child: SizedBox(
+          width: 160,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Album Cover
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        album['image_url'],
+                        album['file_identifier'],
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            width: 160,
+                            height: 160,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 60, color: Colors.white),
+                          );
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return Container(
+                            width: 160,
+                            height: 160,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 60, color: Colors.white),
+                          );
+                        }
+                        return Image.network(
+                          snapshot.data!,
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 160,
+                            height: 160,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 60, color: Colors.white),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _navigateToAlbum(album),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Album Title
+              Text(
+                album['title'] ?? 'Unknown Album',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              // Artist Name
+              Text(
+                album['artist'] ?? 'Unknown Artist',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopChartsSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF282828),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          ...topCharts.asMap().entries.map((entry) {
+            final index = entry.key;
+            final album = entry.value;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  // Rank
+                  SizedBox(
+                    width: 30,
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        color: index < 3 ? const Color(0xFF1DB954) : Colors.grey,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Album Cover
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        album['image_url'],
+                        album['file_identifier'],
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 24, color: Colors.white),
+                          );
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 24, color: Colors.white),
+                          );
+                        }
+                        return Image.network(
+                          snapshot.data!,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 24, color: Colors.white),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Album Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          album['title'] ?? 'Unknown Album',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          album['artist'] ?? 'Unknown Artist',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Play Button
+                  IconButton(
+                    icon: const Icon(Icons.play_arrow, color: Colors.white),
+                    onPressed: () => _navigateToAlbum(album),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArtistGrid(List<Map<String, dynamic>> artists) {
+    return SizedBox(
+      height: 180,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: artists.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 24),
+        itemBuilder: (context, index) => _buildBrowseArtistCircle(artists[index]),
+      ),
+    );
+  }
+
+  Widget _buildBrowseArtistCircle(Map<String, dynamic> artist) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _navigateToArtist(artist),
+        child: Column(
+          children: [
+            // Artist Image
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
+                  backgroundColor: Colors.grey[850],
+                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+                ),
+                Positioned.fill(
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(50),
+                      onTap: () => _navigateToArtist(artist),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Artist Name
+            SizedBox(
+              width: 100,
+              child: Text(
+                artist['name'] ?? 'Unknown Artist',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistGrid(List<Map<String, dynamic>> playlists) {
+    return SizedBox(
+      height: 200,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: playlists.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (context, index) => _buildPlaylistCard(playlists[index]),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistCard(Map<String, dynamic> playlist) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _navigateToPlaylist(playlist),
+        child: SizedBox(
+          width: 160,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Playlist Cover
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.grey[800]!,
+                            Colors.grey[900]!,
+                          ],
+                        ),
+                      ),
+                      child: const Icon(Icons.playlist_play, size: 60, color: Colors.white),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _navigateToPlaylist(playlist),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Playlist Title
+              Text(
+                playlist['title'] ?? 'Unknown Playlist',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              // Playlist Description
+              Text(
+                playlist['description'] ?? '',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGenreGrid() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 1.2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: genres.length,
+      itemBuilder: (context, index) => _buildGenreCard(genres[index]),
+    );
+  }
+
+  Widget _buildGenreCard(Map<String, dynamic> genre) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _navigateToGenre(genre),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                genre['color'] as Color,
+                (genre['color'] as Color).withOpacity(0.7),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -10,
+                bottom: -10,
+                child: Transform.rotate(
+                  angle: 0.3,
+                  child: Icon(
+                    Icons.music_note,
+                    size: 60,
+                    color: Colors.white.withOpacity(0.3),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      genre['name'],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Navigation methods
+  void _navigateToAlbum(Map<String, dynamic> album) {
+    // Navigate to album view
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening album: ${album['title']}')),
+    );
+  }
+
+  void _navigateToArtist(Map<String, dynamic> artist) {
+    // Navigate to artist view
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening artist: ${artist['name']}')),
+    );
+  }
+
+  void _navigateToPlaylist(Map<String, dynamic> playlist) {
+    // Navigate to playlist view
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening playlist: ${playlist['title']}')),
+    );
+  }
+
+  void _navigateToGenre(Map<String, dynamic> genre) {
+    // Navigate to genre view
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening genre: ${genre['name']}')),
+    );
+  }
+
+  Widget _buildShimmerLoader() {
+    // Simple shimmer/skeleton loader for search results
+    return ListView.builder(
+      padding: const EdgeInsets.all(24.0),
+      itemCount: 6,
+      itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _highlightMatch(String text, String query) {
+    if (query.isEmpty) return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final matchIndex = lowerText.indexOf(lowerQuery);
+    if (matchIndex == -1) {
+      return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
+    }
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        children: [
+          TextSpan(text: text.substring(0, matchIndex), style: const TextStyle(color: Colors.white)),
+          TextSpan(text: text.substring(matchIndex, matchIndex + query.length), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          TextSpan(text: text.substring(matchIndex + query.length), style: const TextStyle(color: Colors.white)),
+        ],
       ),
     );
   }
@@ -1286,42 +2157,5 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
     return const SizedBox.shrink();
-  }
-
-  Widget _buildShimmerLoader() {
-    // Simple shimmer/skeleton loader for search results
-    return ListView.builder(
-      padding: const EdgeInsets.all(24.0),
-      itemCount: 6,
-      itemBuilder: (context, index) => Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-  }
-
-  Widget _highlightMatch(String text, String query) {
-    if (query.isEmpty) return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
-    final lowerText = text.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    final matchIndex = lowerText.indexOf(lowerQuery);
-    if (matchIndex == -1) {
-      return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white));
-    }
-    return RichText(
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        children: [
-          TextSpan(text: text.substring(0, matchIndex), style: const TextStyle(color: Colors.white)),
-          TextSpan(text: text.substring(matchIndex, matchIndex + query.length), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-          TextSpan(text: text.substring(matchIndex + query.length), style: const TextStyle(color: Colors.white)),
-        ],
-      ),
-    );
   }
 }

@@ -12,6 +12,7 @@ import 'services/jam_session_service.dart';
 import 'services/noise_detection_service.dart';
 import 'services/route_tracking_service.dart';
 import 'services/ad_manager_service.dart';
+import 'services/listening_time_service.dart';
 import 'widgets/jam_session_indicator.dart';
 import 'widgets/adaptive_features_indicator.dart';
 import 'widgets/lyrics_panel.dart';
@@ -45,6 +46,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
   final RouteTrackingService _routeTrackingService = RouteTrackingService();
   final AdManagerService _adManager = AdManagerService();
   final AnalyticsService _analyticsService = AnalyticsService();
+  final ListeningTimeService _listeningTimeService = ListeningTimeService();
   
   bool isShuffleEnabled = false;
   bool isRepeatEnabled = false;
@@ -75,6 +77,13 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
   // Timer for periodic jam session updates
   Timer? _jamSessionUpdateTimer;
+  
+  // Listening time tracking
+  StreamSubscription? _listeningTimeSubscription;
+  StreamSubscription? _adEligibilitySubscription;
+  int _todayListeningMinutes = 0;
+  bool _hasReached10Minutes = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,9 +96,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     // Restore shuffle/repeat state
     _restorePlayerPreferences();
     
+    // Initialize listening time service
+    _initializeListeningTimeService();
+    
     // Initialize ad service with the main audio player
     _adManager.initialize(_audioService.player);
-    _adManager.startAdTimer();
     
     // Monitor adaptive features active state
     _setupAdaptiveFeaturesListeners();
@@ -169,6 +180,33 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         }
       });
     });
+  }
+
+  // Initialize listening time service and set up listeners
+  Future<void> _initializeListeningTimeService() async {
+    await _listeningTimeService.initialize();
+    
+    // Listen to listening time updates
+    _listeningTimeSubscription = _listeningTimeService.listeningTimeStream.listen((minutes) {
+      if (mounted) {
+        setState(() {
+          _todayListeningMinutes = minutes;
+        });
+      }
+    });
+    
+    // Listen to ad eligibility changes
+    _adEligibilitySubscription = _listeningTimeService.adEligibilityStream.listen((eligible) {
+      if (mounted) {
+        setState(() {
+          _hasReached10Minutes = eligible;
+        });
+      }
+    });
+    
+    // Get initial values
+    _todayListeningMinutes = _listeningTimeService.todayListeningMinutes;
+    _hasReached10Minutes = _listeningTimeService.hasReached10Minutes;
   }
 
   // Set up listeners for adaptive features active state
@@ -367,7 +405,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       _updateJamSessionPlayback();
     }
 
+    // Handle listening time tracking
     if (isPlaying) {
+      // Music is being paused - end listening session
+      _listeningTimeService.endSession();
+      
       _analyticsService.logSongPlayback(
         songId: widget.song['id'].toString(),
         songTitle: widget.song['title'],
@@ -376,6 +418,9 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         eventType: 'song_pause',
       );
     } else {
+      // Music is being played - start listening session
+      _listeningTimeService.startSession();
+      
       _analyticsService.logSongPlayback(
         songId: widget.song['id'].toString(),
         songTitle: widget.song['title'],
@@ -463,6 +508,14 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     _fullScreenAnimController.dispose();
     _stopJamSessionUpdates(); // Ensure timer is cancelled
     _adManager.dispose(); // Dispose ad manager
+    
+    // Clean up listening time subscriptions
+    _listeningTimeSubscription?.cancel();
+    _adEligibilitySubscription?.cancel();
+    
+    // End any active listening session
+    _listeningTimeService.endSession();
+    
     super.dispose();
   }
 
@@ -808,39 +861,42 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                       ],
                     ),
                     child: isAdPlaying
-                        ? Container(
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 32.0),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Advertisement',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
+                        ? SizedBox(
+                            height: 80, // Match the parent container height
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Advertisement',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14, // Reduced font size
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 16),
-                                AdControls(),
-                                const SizedBox(height: 16),
-                                // Fallback error message area (shown if ad fails)
-                                StreamBuilder<PlayerState>(
-                                  stream: _audioService.player.playerStateStream,
-                                  builder: (context, snapshot) {
-                                    final state = snapshot.data;
-                                    if (state != null && state.processingState == ProcessingState.idle) {
-                                      return Text(
-                                        'Ad failed to load. Resuming music...',
-                                        style: TextStyle(color: Colors.red[200], fontSize: 14),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ],
+                                  const SizedBox(height: 4), // Reduced spacing
+                                  Expanded(
+                                    child: AdControls(),
+                                  ),
+                                  // Fallback error message area (shown if ad fails)
+                                  StreamBuilder<PlayerState>(
+                                    stream: _audioService.player.playerStateStream,
+                                    builder: (context, snapshot) {
+                                      final state = snapshot.data;
+                                      if (state != null && state.processingState == ProcessingState.idle) {
+                                        return Text(
+                                          'Ad failed to load. Resuming music...',
+                                          style: TextStyle(color: Colors.red[200], fontSize: 10), // Reduced font size
+                                        );
+                                      }
+                                      return const SizedBox.shrink();
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         : Row( // Show normal player UI when no ad

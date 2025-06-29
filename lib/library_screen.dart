@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'album_view.dart';
 import 'services/playlist_generator_service.dart';
+import 'services/favorites_service.dart'; // Import FavoritesService
 import 'dart:io'; // Import for File
 import 'package:file_picker/file_picker.dart'; // Import file_picker
 import 'dart:ui'; // Import for BackdropFilter
@@ -29,6 +30,10 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   File? _playlistCoverImage; // Variable to hold the selected image
   Map<String, dynamic>? _selectedPlaylist; // Variable to hold the selected playlist for deletion
   bool _isMenuVisible = false; // Track visibility of the context menu
+  final FavoritesService _favoritesService = FavoritesService(); // Add FavoritesService instance
+  List<Map<String, dynamic>> _favoritedAlbums = []; // Add favorited albums list
+  bool _isLoadingFavorites = false; // Add loading state for favorites
+  int _currentTabIndex = 0; // Add tab index for switching between playlists and favorites
 
   // Add animation controller for view transitions
   late AnimationController _animationController;
@@ -62,6 +67,8 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
       setState(() {
         _currentUserId = user.id;
       });
+      // Load favorited albums after getting user
+      _loadFavoritedAlbums();
     } else {
       // If no session, show error message
       if (mounted) {
@@ -74,6 +81,65 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
       }
     }
   }
+
+  Future<void> _loadFavoritedAlbums() async {
+    setState(() {
+      _isLoadingFavorites = true;
+    });
+
+    try {
+      final favoritedAlbums = await _favoritesService.getFavoritedAlbums();
+      if (mounted) {
+        setState(() {
+          _favoritedAlbums = favoritedAlbums;
+          _isLoadingFavorites = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingFavorites = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading favorite albums: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildTabButton(String text, int index) {
+    final isSelected = _currentTabIndex == index;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.white70,
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<List<Map<String, dynamic>>> _fetchPlaylists() async {
     try {
       if (_currentUserId == null) {
@@ -1063,6 +1129,110 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
     );
   }
 
+  Widget _buildPlaylistsContent() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchPlaylists(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildShimmerLoading();
+        }
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text(
+              'Error loading playlists',
+              style: TextStyle(color: Colors.white),
+            ),
+          );
+        }
+
+        final playlists = snapshot.data ?? [];
+        if (playlists.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.playlist_add,
+                  color: Colors.grey,
+                  size: 64,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No playlists yet',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _showCreatePlaylistDialog,
+                  child: const Text('Create Your First Playlist'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _isGridView
+              ? _buildGridView(playlists)
+              : _buildListView(playlists),
+        );
+      },
+    );
+  }
+
+  Widget _buildFavoritesContent() {
+    if (_isLoadingFavorites) {
+      return _buildShimmerLoading();
+    }
+
+    if (_favoritedAlbums.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.favorite_border,
+              color: Colors.grey,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No favorite albums yet',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Start exploring and add albums to your favorites',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _isGridView
+          ? _buildGridView(_favoritedAlbums)
+          : _buildListView(_favoritedAlbums),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -1081,134 +1251,158 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                   ),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  // Title with icon
+                  // Title and action buttons row
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.library_music,
-                          color: Colors.purple,
-                          size: 24,
-                        ),
+                      // Title with icon
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.library_music,
+                              color: Colors.purple,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          const Text(
+                            'Your Library',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      const Text(
-                        'Your Playlists',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.5,
-                        ),
+
+                      // Action buttons
+                      Row(
+                        children: [
+                          // View toggle button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () {
+                                  setState(() {
+                                    _isGridView = !_isGridView;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _isGridView ? Icons.view_list : Icons.grid_view,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _isGridView ? 'List View' : 'Grid View',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(width: 16),
+
+                          // AI Playlist button (only show for playlists tab)
+                          if (_currentTabIndex == 0) ...[
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: _createAIPlaylist,
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          color: Colors.deepPurple,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'AI Playlist',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 16),
+                          ],
+
+                          // Create playlist button (only show for playlists tab)
+                          if (_currentTabIndex == 0)
+                            ElevatedButton.icon(
+                              onPressed: _showCreatePlaylistDialog,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Create Playlist'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
 
-                  // Action buttons
-                  Row(
-                    children: [
-                      // View toggle button
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () {
-                              setState(() {
-                                _isGridView = !_isGridView;
-                              });
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _isGridView ? Icons.view_list : Icons.grid_view,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _isGridView ? 'List View' : 'Grid View',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // AI Playlist button
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: _createAIPlaylist,
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.auto_awesome,
-                                    color: Colors.deepPurple,
-                                    size: 20,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'AI Playlist',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // Create playlist button
-                      ElevatedButton.icon(
-                        onPressed: _showCreatePlaylistDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create Playlist'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Tab bar
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTabButton('Your Playlists', 0),
+                        _buildTabButton('Favorite Albums', 1),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1216,62 +1410,9 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
 
             // Playlists content with animations
             Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _fetchPlaylists(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return _buildShimmerLoading();
-                  }
-                  if (snapshot.hasError) {
-                    return const Center(
-                      child: Text(
-                        'Error loading playlists',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    );
-                  }
-
-                  final playlists = snapshot.data ?? [];
-                  if (playlists.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.playlist_add,
-                            color: Colors.grey,
-                            size: 64,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'No playlists yet',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed: _showCreatePlaylistDialog,
-                            child: const Text('Create Your First Playlist'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: _isGridView
-                        ? _buildGridView(playlists)
-                        : _buildListView(playlists),
-                  );
-                },
-              ),
+              child: _currentTabIndex == 0
+                  ? _buildPlaylistsContent()
+                  : _buildFavoritesContent(),
             ),
           ],
         ),
