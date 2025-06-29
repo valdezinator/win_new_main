@@ -34,6 +34,7 @@ dependencies:
   package_info_plus: ^8.3.0
   palette_generator: ^0.3.3+5
   permission_handler: ^11.3.0
+  provider: ^6.1.5
   qr_flutter: ^4.1.0
   record: ^5.0.4
   rename_app: ^1.6.3
@@ -56,6 +57,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   mockito: ^5.4.4
+  msix: ^3.16.9
   test: ^1.24.9
 
 # Note: package_info_plus moved to regular dependencies
@@ -65,3 +67,18 @@ flutter:
     - assets/icons/
     - .env
     - assets/
+
+msix_config:
+  display_name: Resonance
+  publisher: CN=Resonance
+  publisher_display_name: Resonance
+  identity_name: com.resonance.app
+  msix_version: 1.0.0.0
+  logo_path: C:\Users\shrey\OneDrive\Documents\win_new_main\icon.jpg
+  capabilities: internetClient, location, microphone
+  enable_at_startup: true
+  store: true
+  output_path: C:\Users\shrey\Downloads
+  output_name: resonance
+  certificate_path: ./resonance_cert.pfx
+  certificate_password: 2008

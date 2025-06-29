@@ -1,0 +1,3 @@
+@echo off
+echo Testing certificate generation...
+call generate_cert_openssl.bat 
