@@ -128,120 +128,135 @@ class _LyricsPanelState extends State<LyricsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Lyrics',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24.0), // Reduce height from the bottom
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Lyrics',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.translate,
-                  color: _showTranslation ? widget.accentColor : Colors.white.withOpacity(0.7),
+                IconButton(
+                  icon: Icon(
+                    Icons.translate,
+                    color: _showTranslation ? widget.accentColor : Colors.white.withOpacity(0.7),
+                  ),
+                  tooltip: 'Show translation',
+                  onPressed: () {
+                    setState(() {
+                      _showTranslation = !_showTranslation;
+                    });
+                  },
                 ),
-                onPressed: () {
-                  setState(() {
-                    _showTranslation = !_showTranslation;
-                  });
-                },
-              ),
-            ],
+                IconButton(
+                  icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
+                  tooltip: 'Close',
+                  onPressed: widget.onClose,
+                ),
+              ],
+            ),
           ),
-        ),
-        Divider(
-          color: Colors.white.withOpacity(0.1),
-          height: 1,
-        ),
-        Expanded(
-          child: _isLrc && _lrcLines.isNotEmpty
-              ? ListView.builder(
-                  controller: _scrollController,
-                  itemCount: _lrcLines.length,
-                  padding: const EdgeInsets.symmetric(vertical: 20.0),
-                  itemBuilder: (context, idx) {
-                    final isActive = idx == _currentLine;                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                            style: GoogleFonts.inter(                              color: isActive
-                                  ? Colors.white
-                                  : Colors.white.withOpacity(0.7),
-                              fontSize: isActive ? 18 : 15,
-                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                              height: 1.6,
-                              letterSpacing: 0.2,
-                              shadows: isActive                                  ? [
-                                      Shadow(
-                                        color: widget.accentColor.withOpacity(0.5),
-                                        blurRadius: 8,
-                                      ),
-                                    ]
-                                  : [],
-                            ),
-                            child: Text(
-                              _lrcLines[idx].text,
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                          if (_showTranslation && _lrcLines[idx].translatedText != null)
-                            AnimatedOpacity(
+          Divider(
+            color: Colors.white.withOpacity(0.1),
+            height: 1,
+          ),
+          Expanded(
+            child: _isLrc && _lrcLines.isNotEmpty
+                ? ListView.builder(
+                    controller: _scrollController,
+                    itemCount: _lrcLines.length,
+                    padding: const EdgeInsets.symmetric(vertical: 20.0),
+                    itemBuilder: (context, idx) {
+                      final isActive = idx == _currentLine;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 300),
-                              opacity: _showTranslation ? 1.0 : 0.0,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  _lrcLines[idx].translatedText!,                                  style: GoogleFonts.inter(
-                                    color: Colors.white.withOpacity(isActive ? 0.8 : 0.5),
-                                    fontSize: isActive ? 14 : 12,
-                                    height: 1.4,
-                                    letterSpacing: 0.1,
-                                  ),
-                                  textAlign: TextAlign.left,
-                                ),
+                              curve: Curves.easeInOut,
+                              style: GoogleFonts.inter(
+                                color: isActive
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.7),
+                                fontSize: isActive ? 18 : 15,
+                                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                height: 1.6,
+                                letterSpacing: 0.2,
+                                shadows: isActive
+                                    ? [
+                                        Shadow(
+                                          color: widget.accentColor.withOpacity(0.5),
+                                          blurRadius: 8,
+                                        ),
+                                      ]
+                                    : [],
+                              ),
+                              child: Text(
+                                _lrcLines[idx].text,
+                                textAlign: TextAlign.left,
                               ),
                             ),
-                        ],
-                      ),
-                    );
-                  },
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                  child: widget.lyrics != null && widget.lyrics!.trim().isNotEmpty
-                      ? Text(
-                          widget.lyrics!,
-                          style: GoogleFonts.inter(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                            height: 1.5,
-                            letterSpacing: 0.3,
-                          ),
-                        )
-                      : Center(
-                          child: Text(
-                            'No lyrics available',
+                            if (_showTranslation && _lrcLines[idx].translatedText != null)
+                              AnimatedOpacity(
+                                duration: const Duration(milliseconds: 300),
+                                opacity: _showTranslation ? 1.0 : 0.0,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    _lrcLines[idx].translatedText!,
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white.withOpacity(isActive ? 0.8 : 0.5),
+                                      fontSize: isActive ? 14 : 12,
+                                      height: 1.4,
+                                      letterSpacing: 0.1,
+                                    ),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                    child: widget.lyrics != null && widget.lyrics!.trim().isNotEmpty
+                        ? Text(
+                            widget.lyrics!,
                             style: GoogleFonts.inter(
-                              color: Colors.white.withOpacity(0.5),
+                              color: Colors.white.withOpacity(0.9),
                               fontSize: 14,
+                              height: 1.5,
+                              letterSpacing: 0.3,
+                            ),
+                          )
+                        : Center(
+                            child: Text(
+                              'No lyrics available',
+                              style: GoogleFonts.inter(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 14,
+                              ),
                             ),
                           ),
-                        ),
-                ),
-        ),
-      ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

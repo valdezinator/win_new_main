@@ -59,6 +59,8 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
   Duration _lyricsCurrentPosition = Duration.zero;
   Duration _lyricsTotalDuration = Duration.zero;
   Color _lyricsAccentColor = Colors.green;
+  static const double _panelWidth = 380;
+
   void openLyricsPanel({
     required String? lyrics,
     String? translatedLyrics,
@@ -84,77 +86,85 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
 
   @override
   Widget build(BuildContext context) {
+    final bool showAnyPanel = (widget.showQueue && widget.currentSong != null) || widget.showLyrics;
+    final double rightPadding = showAnyPanel ? _panelWidth : 0;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0C0F14),
       body: Stack(
         children: [
-          // Main content row
-          Row(
-            children: [
-              // Navigation Sidebar Container
-              SizedBox(
-                width: 232, // 200 + 16 * 2 for margins
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 16, 16, 108), // Bottom padding for music player
-                  child: Material(
-                    elevation: 8,
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(15),
-                    child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.1),
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(15),
-                        bottomRight: Radius.circular(15),
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                        children: [
-                          const SizedBox(height: 40),
-                          _buildNavItem(0, 'assets/icons/home_icon.svg', 'Home'),
-                          _buildNavItem(1, 'assets/icons/search_icon.svg', 'Search'),
-                          _buildNavItem(2, 'assets/icons/library_icon.svg', 'Library'),
-                          _buildNavItem(3, 'assets/icons/profile_icon.svg', 'Profile'),
-                          const Spacer(),
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _handleSignOut,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+          // Main content row, shifted left when a panel is open
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.ease,
+            padding: EdgeInsets.only(right: rightPadding),
+            child: Row(
+              children: [
+                // Navigation Sidebar Container
+                SizedBox(
+                  width: 232, // 200 + 16 * 2 for margins
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 16, 16, 108), // Bottom padding for music player
+                    child: Material(
+                      elevation: 8,
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(15),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.1),
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(15),
+                            bottomRight: Radius.circular(15),
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 40),
+                            _buildNavItem(0, 'assets/icons/home_icon.svg', 'Home'),
+                            _buildNavItem(1, 'assets/icons/search_icon.svg', 'Search'),
+                            _buildNavItem(2, 'assets/icons/library_icon.svg', 'Library'),
+                            _buildNavItem(3, 'assets/icons/profile_icon.svg', 'Profile'),
+                            const Spacer(),
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _handleSignOut,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
-                                ),
-                                child: const Text(
-                                  'Sign Out',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.w500,
+                                  child: const Text(
+                                    'Sign Out',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                            const SizedBox(height: 16),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              // Main content area
-              Expanded(
-                child: widget.child,
-              ),
-            ],
+                // Main content area
+                Expanded(
+                  child: widget.child,
+                ),
+              ],
+            ),
           ),
 
           // Music Player (if a song is selected)
@@ -189,79 +199,85 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
               ),
             ),
 
-          // Queue List (conditionally shown)
-          if (widget.showQueue && widget.currentSong != null)
-            Positioned(
+            // Floating Queue Panel (Animated)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.ease,
               top: 60.0,
-              right: 0,
+              right: (widget.showQueue && widget.currentSong != null) ? 0 : -_panelWidth,
               bottom: 80.0, // Height of the MusicPlayer
-              child: QueueList(
-                currentSong: widget.currentSong!,
-                onClose: () => widget.onQueueToggle(false),
-                onSongSelected: widget.onSongSelected,
-                onQueueReordered: widget.onQueueReordered,
-              ),
+              width: _panelWidth,
+              child: (widget.showQueue && widget.currentSong != null)
+                  ? Material(
+                      elevation: 16,
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.transparent,
+                      child: QueueList(
+                        currentSong: widget.currentSong!,
+                        onClose: () => widget.onQueueToggle(false),
+                        onSongSelected: widget.onSongSelected,
+                        onQueueReordered: widget.onQueueReordered,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
 
-          // Lyrics overlay (top-level)
-          if (widget.showLyrics)
-            Positioned(
+            // Floating Lyrics Panel (Animated)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.ease,
               top: 0,
-              right: 0,
+              right: widget.showLyrics ? 0 : -_panelWidth,
               bottom: 80, // Height of the MusicPlayer
-              width: 340,
-              child: IgnorePointer(
-                ignoring: !widget.showLyrics,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: widget.showLyrics ? 1.0 : 0.0,
-                  child: Material(
-                    elevation: 16,
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.transparent,
-                    child: Container(
-                      height: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF181A1F),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.08),
-                          width: 1.5,
+              width: _panelWidth,
+              child: widget.showLyrics
+                  ? Material(
+                      elevation: 16,
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.transparent,
+                      child: Container(
+                        height: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF181A1F),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.08),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 24,
-                            spreadRadius: 2,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        children: [                          Positioned.fill(
-                            child: LyricsPanel(
-                              lyrics: widget.lyrics,
-                              translatedLyrics: widget.translatedLyrics,
-                              onClose: widget.closeLyricsPanel,
-                              currentPosition: widget.lyricsCurrentPosition,
-                              totalDuration: widget.lyricsTotalDuration,
-                              accentColor: widget.lyricsAccentColor,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: LyricsPanel(
+                                lyrics: widget.lyrics,
+                                translatedLyrics: widget.translatedLyrics,
+                                onClose: widget.closeLyricsPanel,
+                                currentPosition: widget.lyricsCurrentPosition,
+                                totalDuration: widget.lyricsTotalDuration,
+                                accentColor: widget.lyricsAccentColor,
+                              ),
                             ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: IconButton(
-                              icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
-                              onPressed: widget.closeLyricsPanel,
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: IconButton(
+                                icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
+                                onPressed: widget.closeLyricsPanel,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
+                    )
+                  : const SizedBox.shrink(),
             ),
         ],
       ),

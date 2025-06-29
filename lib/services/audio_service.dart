@@ -69,8 +69,8 @@ class AudioService {
     return url.trim().replaceAll('\n', '').replaceAll('%0A', '');
   }
 
-  Future<void> playSong(Map<String, dynamic> song) async {
-    print('[AudioService] playSong called for song id: \'${song['id']}\'');
+  Future<void> playSong(Map<String, dynamic> song, {bool restorePosition = false}) async {
+    print('[AudioService] playSong called for song id: ${song['id']}');
     // Always stop any ad playback before playing a new song
     try {
       AdManagerService().stopAd();
@@ -82,6 +82,9 @@ class AudioService {
     }
 
     try {
+      // Dispose previous song resources
+      await player.stop();
+      _disposeCurrentSongResources();
       final songData = song['songs_2'] ?? song;
       final processedSong = {
         ...Map<String, dynamic>.from(songData),
@@ -163,15 +166,17 @@ class AudioService {
         );
       }
 
-      // Restore last position if available
-      final prefs = await SharedPreferences.getInstance();
-      int? lastPositionMs;
-      if (_currentSong != null && _currentSong!['id'] != null) {
-        lastPositionMs = prefs.getInt('last_position_ms_${_currentSong!['id']}');
-      }
+      // Only restore last position if explicitly requested (e.g., on app restart)
       Duration initialPosition = Duration.zero;
-      if (lastPositionMs != null && lastPositionMs > 0) {
-        initialPosition = Duration(milliseconds: lastPositionMs);
+      if (restorePosition) {
+        final prefs = await SharedPreferences.getInstance();
+        int? lastPositionMs;
+        if (_currentSong != null && _currentSong!['id'] != null) {
+          lastPositionMs = prefs.getInt('last_position_ms_${_currentSong!['id']}');
+        }
+        if (lastPositionMs != null && lastPositionMs > 0) {
+          initialPosition = Duration(milliseconds: lastPositionMs);
+        }
       }
 
       await player.setAudioSource(audioSource, initialPosition: initialPosition);
@@ -210,34 +215,14 @@ class AudioService {
       try {
         final song = Map<String, dynamic>.from(json.decode(songJson));
         debugPrint('[AudioService] Restored song: ' + song.toString());
-        _currentSong = song;
-        _currentSongController.add(song);
-
-        if (song['queue'] != null) {
-          _queue = List<Map<String, dynamic>>.from(song['queue']);
-          _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
-        }
-
-        if (song['audio_url'] != null) {
-          final audioSource = AudioSource.uri(
-            Uri.parse(sanitizeUrl(song['audio_url'])),
-            tag: MediaItem(
-              id: song['id']?.toString() ?? '',
-              title: song['title']?.toString() ?? 'Unknown',
-              artist: song['artist']?.toString() ?? 'Unknown Artist',
-              artUri: song['image_url'] != null ? Uri.parse(sanitizeUrl(song['image_url'])) : null,
-            ),
-          );
-          // Restore last position if available
-          int? lastPositionMs = prefs.getInt('last_position_ms_${song['id']}');
-          Duration initialPosition = Duration.zero;
-          if (lastPositionMs != null && lastPositionMs > 0) {
-            initialPosition = Duration(milliseconds: lastPositionMs);
-          }
-          await player.setAudioSource(audioSource, initialPosition: initialPosition);
-          _isPlaying = false;
-          _isPlayingController.add(false);
-        }
+        
+        // Use the new playSong method with restorePosition: true to restore the last position
+        await playSong(song, restorePosition: true);
+        
+        // Don't auto-play on app restart, just load the song
+        await player.pause();
+        _isPlaying = false;
+        _isPlayingController.add(false);
       } catch (e) {
         // Error loading last played song
         _handlePlaybackError(error: e);
@@ -366,7 +351,7 @@ class AudioService {
       try {
         Map<String, dynamic> retryData = Map<String, dynamic>.from(_currentSong!);
         retryData['downloaded'] = useDownloaded;
-        await playSong(retryData);
+        await playSong(retryData, restorePosition: false);
       } catch (e) {
         // If retry fails, just notify via error stream
         _errorController.add(PlaybackError.unknown);
@@ -418,7 +403,7 @@ class AudioService {
           await player.play();
           _isPlaying = true;
         } else if (_currentSong != null) {
-          await playSong(_currentSong!);
+          await playSong(_currentSong!, restorePosition: false);
         }
       }
       _isPlayingController.add(_isPlaying);
@@ -517,7 +502,7 @@ class AudioService {
         'queue': _queue,
       };
 
-      await playSong(songToPlay);
+      await playSong(songToPlay, restorePosition: false);
     } catch (e) {
       _handlePlaybackError(error: e);
     }
@@ -537,7 +522,7 @@ class AudioService {
           ...Map<String, dynamic>.from(prevSongMap),
           'queue': _queue,
         };
-        await playSong(songToPlay);
+        await playSong(songToPlay, restorePosition: false);
       } else {
         await player.seek(Duration.zero);
       }
@@ -554,5 +539,17 @@ class AudioService {
         await prefs.setInt('last_position_ms_${_currentSong!['id']}', position.inMilliseconds);
       }
     });
+  }
+
+  // Dispose any listeners, timers, or resources from the previous song
+  void _disposeCurrentSongResources() {
+    // Cancel error reset timer if active
+    _errorResetTimer?.cancel();
+    _errorResetTimer = null;
+    // Cancel cleanup timer if active
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
+    // Optionally, reset per-song state
+    // (If you add per-song subscriptions or listeners, cancel them here)
   }
 }

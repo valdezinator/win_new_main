@@ -59,6 +59,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   final BackblazeService _backblazeService = BackblazeService(); // Add BackblazeService instance
   final FavoritesService _favoritesService = FavoritesService(); // Add FavoritesService instance
 
+  final Map<String, Map<String, dynamic>> _songCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -436,6 +438,10 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           }
         });
       }
+
+      for (var song in validSongs) {
+        _songCache[song['id'].toString()] = song;
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -474,7 +480,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
               children: [
                 const Icon(Icons.block, color: Colors.white),
                 const SizedBox(width: 8),
-                Text('Cannot play: ${song['title']} - Audio not available'),
+                Text('Cannot play: \'${song['title']}\' - Audio not available'),
               ],
             ),
             backgroundColor: Colors.red,
@@ -489,61 +495,66 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
     }
 
     try {
+      final songId = song['id'].toString();
+      Map<String, dynamic> songData = song;
+      if (_songCache.containsKey(songId)) {
+        songData = _songCache[songId]!;
+      }
       // Resolve audio URL using BackblazeService if needed
       final audioUrl = await _backblazeService.getAudioUrl(
-        song['audio_url'],
-        song['file_identifier'],
+        songData['audio_url'],
+        songData['file_identifier'],
       );
       print('Resolved audio URL (AlbumView): $audioUrl'); // Debug log
 
       // Format queue data first to ensure all songs have required fields
       final formattedQueue = songs.map((s) {
-        final songData = s['songs_2'] ?? s;
-        var duration = songData['duration'];
+        final songDataQ = s['songs_2'] ?? s;
+        var duration = songDataQ['duration'];
         if (duration is String && duration.contains(':')) {
           final parts = duration.split(':');
           duration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
         }
         return {
-          ...Map<String, dynamic>.from(songData),
-          'id': songData['id'],
-          'title': songData['title'] ?? 'Unknown',
-          'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-          'audio_url': songData['audio_url'],
-          'image_url': songData['image_url'] ?? widget.album['image_url'],
+          ...Map<String, dynamic>.from(songDataQ),
+          'id': songDataQ['id'],
+          'title': songDataQ['title'] ?? 'Unknown',
+          'artist': songDataQ['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+          'audio_url': songDataQ['audio_url'],
+          'image_url': songDataQ['image_url'] ?? widget.album['image_url'],
           'album': widget.album['playlist_name'] ?? widget.album['title'],
           'album_id': widget.album['id'],
           'duration': duration,
           'downloaded': _isDownloaded,
-          'filename': _isDownloaded ? 'song_${songData['id']}' : null,
+          'filename': _isDownloaded ? 'song_${songDataQ['id']}' : null,
         };
       }).toList();
 
-      var songDuration = song['duration'];
+      var songDuration = songData['duration'];
       if (songDuration is String && songDuration.contains(':')) {
         final parts = songDuration.split(':');
         songDuration = (int.parse(parts[0]) * 60) + int.parse(parts[1]);
       }
 
       final songWithAlbumContext = {
-        ...Map<String, dynamic>.from(song),
-        'id': song['id'],
+        ...Map<String, dynamic>.from(songData),
+        'id': songData['id'],
         'album': widget.album['playlist_name'] ?? widget.album['title'],
         'album_id': widget.album['id'],
         'album_art': widget.album['image_url'],
-        'image_url': song['image_url'] ?? widget.album['image_url'],
-        'artist': song['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-        'title': song['title'] ?? 'Unknown Title',
+        'image_url': songData['image_url'] ?? widget.album['image_url'],
+        'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+        'title': songData['title'] ?? 'Unknown Title',
         'duration': songDuration,
-        'song_lyrics': song['song_lyrics'],
+        'song_lyrics': songData['song_lyrics'],
         'queue': formattedQueue,
         'downloaded': _isDownloaded,
-        'filename': _isDownloaded ? 'song_${song['id']}' : null,
+        'filename': _isDownloaded ? 'song_${songData['id']}' : null,
         'audio_url': audioUrl, // Use resolved audio URL
       };
 
       _currentSong = songWithAlbumContext;
-      currentPlayingIndex = songs.indexWhere((s) => s['id'] == song['id']);
+      currentPlayingIndex = songs.indexWhere((s) => s['id'] == songData['id']);
 
       widget.onSongSelected(songWithAlbumContext);
     } catch (e) {

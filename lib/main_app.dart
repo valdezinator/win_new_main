@@ -100,14 +100,14 @@ class _MainAppState extends State<MainApp> {
       ..._currentSong!,
       'queue': newQueue,
     };
-    _audioService.playSong(updatedSong);
+    _audioService.playSong(updatedSong, restorePosition: false);
     setState(() {
       _currentSong = updatedSong;
     });
   }
 
   void _playSong(Map<String, dynamic> song) {
-    _audioService.playSong(song);
+    _audioService.playSong(song, restorePosition: false);
   }
 
   @override

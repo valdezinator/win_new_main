@@ -158,7 +158,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
                 // Only change song if it's different from current
                 if (widget.song['id'] != currentSongId) {
-                  _audioService.playSong(songToPlay);
+                  _audioService.playSong(songToPlay, restorePosition: false);
 
                   // Seek to position
                   if (positionMs > 0) {
@@ -354,7 +354,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       final songToReplay = Map<String, dynamic>.from(widget.song);
       // Ensure lyrics data is preserved - commented out
       // songToReplay['song_lyrics'] = widget.song['song_lyrics'];
-      _audioService.playSong(songToReplay);
+      _audioService.playSong(songToReplay, restorePosition: false);
     } else if (isShuffleEnabled) {
       // Play a random song from the queue
       final List<Map<String, dynamic>> currentQueue = List<Map<String, dynamic>>.from(widget.song['queue'] ?? []);
@@ -362,7 +362,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
       
       final random = Random();
       final songToPlay = currentQueue[random.nextInt(currentQueue.length)];
-      _audioService.playSong(songToPlay);
+      _audioService.playSong(songToPlay, restorePosition: false);
     } else {
       // Play the next song
       _audioService.playNext();
@@ -488,7 +488,7 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         currentPosition = Duration.zero;
         totalDuration = Duration.zero;
       });
-      _audioService.playSong(widget.song);
+      _audioService.playSong(widget.song, restorePosition: false);
       
       // Fetch lyrics for the new song
       if (widget.song['id'] != null) {

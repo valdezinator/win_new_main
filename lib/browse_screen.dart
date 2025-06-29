@@ -62,6 +62,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   // Hover state for song items
   int? _hoveredSongIndex;
 
+  final Map<String, Map<String, dynamic>> _songCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -131,6 +133,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
       setState(() {
         albums = List<Map<String, dynamic>>.from(response);
+        // Cache all songs in albums if available
+        for (var album in albums) {
+          if (album['songs'] != null) {
+            for (var song in album['songs']) {
+              _songCache[song['id'].toString()] = song;
+            }
+          }
+        }
       });
     } catch (e) {
       print('Error loading albums: $e');
@@ -549,13 +559,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   void _playSearchResult(Map<String, dynamic> song) async {
     try {
+      final songId = song['id'].toString();
+      Map<String, dynamic> songData = song;
+      if (_songCache.containsKey(songId)) {
+        songData = _songCache[songId]!;
+      }
       final audioUrl = await _backblazeService.getAudioUrl(
-        song['audio_url'],
-        song['file_identifier'],
+        songData['audio_url'],
+        songData['file_identifier'],
       );
       print('Resolved audio URL (BrowseScreen): $audioUrl');
       final songWithSearchContext = {
-        ...Map<String, dynamic>.from(song),
+        ...Map<String, dynamic>.from(songData),
         'queue': categorizedResults['Songs'] ?? [],  // Use search results as queue
         'isPlaying': true,
         'audio_url': audioUrl,
@@ -2417,52 +2432,127 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   Widget _buildQuickActionsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Quick Actions',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Vertical divider
+        Container(
+          width: 1,
+          height: 200, // Adjust height as needed
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.green.withOpacity(0.3),
+                Colors.green.withOpacity(0.6),
+                Colors.green.withOpacity(0.3),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 24),
+        
+        // Quick Actions content
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.02),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Quick Actions',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _buildQuickActionChip(
-                icon: Icons.history,
-                label: 'Recently Played',
-                onTap: () => _showRecentlyPlayed(),
-              ),
-              _buildQuickActionChip(
-                icon: Icons.favorite,
-                label: 'Liked Songs',
-                onTap: () => _showLikedSongs(),
-              ),
-              _buildQuickActionChip(
-                icon: Icons.playlist_play,
-                label: 'Your Playlists',
-                onTap: () => _showUserPlaylists(),
-              ),
-              _buildQuickActionChip(
-                icon: Icons.trending_up,
-                label: 'Top Charts',
-                onTap: () => _showTopCharts(),
+                ),
+                const SizedBox(height: 16),
+                Column(
+                  children: [
+                    _buildQuickActionItem(
+                      icon: Icons.history,
+                      label: 'Recently Played',
+                      onTap: () => _showRecentlyPlayed(),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildQuickActionItem(
+                      icon: Icons.favorite,
+                      label: 'Liked Songs',
+                      onTap: () => _showLikedSongs(),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildQuickActionItem(
+                      icon: Icons.playlist_play,
+                      label: 'Your Playlists',
+                      onTap: () => _showUserPlaylists(),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildQuickActionItem(
+                      icon: Icons.trending_up,
+                      label: 'Top Charts',
+                      onTap: () => _showTopCharts(),
+                    ),
+                  ],
                 ),
               ],
             ),
-        ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActionItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: Colors.green,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.grey[400],
+                size: 16,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2837,275 +2927,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildQuickActionChip({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                    color: Colors.green,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-  void _showSongContextMenu(Map<String, dynamic> song) async {
-    final RenderBox box = context.findRenderObject() as RenderBox;
-    final Offset position = box.localToGlobal(Offset.zero);
-    
-    final selected = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx + 40,
-        position.dy + 40,
-        position.dx + 41,
-        position.dy + 41,
-      ),
-      items: [
-        const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
-        const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
-        const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
-        const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
-        const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
-      ],
-    );
-    
-    if (selected == 'play') {
-      _playSearchResult(song);
-    } else if (selected == 'add_to_queue') {
-      _addToQueue(song);
-    } else if (selected == 'add_to_playlist') {
-      _showAddToPlaylistDialog(song);
-    } else if (selected == 'view_album') {
-      _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
-    } else if (selected == 'view_artist') {
-      _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
-    }
-  }
-
-  void _addToQueue(Map<String, dynamic> song) {
-    // Add the song after the current song in the queue
-    if (widget.currentlyPlayingSong == null) {
-      // No song is currently playing, just play this song
-      _playSearchResult(song);
-      return;
-    }
-    final currentQueue = List<Map<String, dynamic>>.from(widget.currentlyPlayingSong!['queue'] ?? []);
-    final currentSongId = widget.currentlyPlayingSong!['id'];
-    final currentIndex = currentQueue.indexWhere((s) => s['id'] == currentSongId);
-    if (currentIndex == -1) {
-      // Fallback: append to end
-      currentQueue.add(song);
-    } else {
-      currentQueue.insert(currentIndex + 1, song);
-    }
-    // Update the queue and keep the current song playing
-    final updatedSong = {
-      ...widget.currentlyPlayingSong!,
-      'queue': currentQueue,
-    };
-    widget.onSongSelected(updatedSong);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Added to queue')),
-    );
-  }
-
-  void _showAddToPlaylistDialog(Map<String, dynamic> song) async {
-    final supabase = widget.supabaseClient;
-    final user = supabase.auth.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in to add to playlist.')),
-      );
-      return;
-    }
-
-    // Fetch playlists for the user
-    List<Map<String, dynamic>> playlists = [];
-    try {
-      final data = await supabase
-          .from('playlist')
-          .select('id, playlist_name, image_url, user_id, description, created_at')
-          .eq('user_id', user.id)
-          .order('created_at', ascending: false);
-      playlists = List<Map<String, dynamic>>.from(data);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading playlists: $e')),
-      );
-      return;
-    }
-
-    String? selectedPlaylistId;
-    final TextEditingController newPlaylistController = TextEditingController();
-    bool creatingNew = false;
-    bool isLoading = false;
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF23272A),
-              title: const Text('Add to Playlist', style: TextStyle(color: Colors.white)),
-              content: SizedBox(
-                width: 350,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!creatingNew) ...[
-                      if (playlists.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Text('No playlists found. Create a new one!', style: TextStyle(color: Colors.white70)),
-                        ),
-                      if (playlists.isNotEmpty)
-                        ...playlists.map((playlist) => RadioListTile<String>(
-                              value: playlist['id'].toString(),
-                              groupValue: selectedPlaylistId,
-                              onChanged: (val) => setState(() => selectedPlaylistId = val),
-                              title: Text(playlist['playlist_name'] ?? 'Unnamed Playlist', style: const TextStyle(color: Colors.white)),
-                              subtitle: playlist['description'] != null && playlist['description'].toString().isNotEmpty
-                                  ? Text(playlist['description'], style: const TextStyle(color: Colors.white54, fontSize: 12))
-                                  : null,
-                              secondary: playlist['image_url'] != null
-                                  ? CircleAvatar(backgroundImage: NetworkImage(playlist['image_url']), radius: 18)
-                                  : const CircleAvatar(child: Icon(Icons.music_note)),
-                              activeColor: Colors.green,
-                            )),
-                      const SizedBox(height: 16),
-                      TextButton.icon(
-                        onPressed: () => setState(() => creatingNew = true),
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        label: const Text('Create New Playlist', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                    if (creatingNew) ...[
-                      TextField(
-                        controller: newPlaylistController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Playlist name',
-                          hintStyle: TextStyle(color: Colors.white54),
-                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                          focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          ElevatedButton(
-                            onPressed: isLoading
-                                ? null
-                                : () async {
-                                    if (newPlaylistController.text.trim().isEmpty) return;
-                                    setState(() => isLoading = true);
-                                    try {
-                                      final response = await supabase.from('playlists').insert({
-                                        'playlist_name': newPlaylistController.text.trim(),
-                                        'user_id': user.id,
-                                        'created_at': DateTime.now().toIso8601String(),
-                                      }).select().single();
-                                      playlists.insert(0, response);
-                                      selectedPlaylistId = response['id'].toString();
-                                      creatingNew = false;
-                                      newPlaylistController.clear();
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error creating playlist: $e')),
-                                      );
-                                    } finally {
-                                      setState(() => isLoading = false);
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                            child: isLoading
-                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Create'),
-                          ),
-                          const SizedBox(width: 16),
-                          TextButton(
-                            onPressed: isLoading ? null : () => setState(() => creatingNew = false),
-                            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-                ),
-                ElevatedButton(
-                  onPressed: (selectedPlaylistId != null && !creatingNew && !isLoading)
-                      ? () async {
-                          setState(() => isLoading = true);
-                          try {
-                            // Insert song into playlist_songs table
-                            await supabase.from('playlist_songs').insert({
-                              'playlist_id': selectedPlaylistId,
-                              'song_id': song['id'],
-                              'added_at': DateTime.now().toIso8601String(),
-                            });
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Song added to playlist!')),
-                            );
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error adding to playlist: $e')),
-                            );
-                          } finally {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: isLoading
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildSongsTab() {
     final songs = categorizedResults['Songs'] ?? [];
 
@@ -3228,6 +3049,239 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           ],
         ),
       ),
+    );
+  }
+
+  void _showSongContextMenu(Map<String, dynamic> song) async {
+    final RenderBox box = context.findRenderObject() as RenderBox;
+    final Offset position = box.localToGlobal(Offset.zero);
+    
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx + 40,
+        position.dy + 40,
+        position.dx + 41,
+        position.dy + 41,
+      ),
+      items: [
+        const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
+        const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
+        const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
+        const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
+        const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
+      ],
+    );
+    
+    if (selected == 'play') {
+      _playSearchResult(song);
+    } else if (selected == 'add_to_queue') {
+      _addToQueue(song);
+    } else if (selected == 'add_to_playlist') {
+      _showAddToPlaylistDialog(song);
+    } else if (selected == 'view_album') {
+      _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
+    } else if (selected == 'view_artist') {
+      _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
+    }
+  }
+
+  void _addToQueue(Map<String, dynamic> song) {
+    // Add the song after the current song in the queue
+    if (widget.currentlyPlayingSong == null) {
+      // No song is currently playing, just play this song
+      _playSearchResult(song);
+      return;
+    }
+    final currentQueue = List<Map<String, dynamic>>.from(widget.currentlyPlayingSong!['queue'] ?? []);
+    final currentSongId = widget.currentlyPlayingSong!['id'];
+    final currentIndex = currentQueue.indexWhere((s) => s['id'] == currentSongId);
+    if (currentIndex == -1) {
+      // Fallback: append to end
+      currentQueue.add(song);
+    } else {
+      currentQueue.insert(currentIndex + 1, song);
+    }
+    // Update the queue and keep the current song playing
+    final updatedSong = {
+      ...widget.currentlyPlayingSong!,
+      'queue': currentQueue,
+    };
+    widget.onSongSelected(updatedSong);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Added to queue')),
+    );
+  }
+
+  void _showAddToPlaylistDialog(Map<String, dynamic> song) async {
+    final supabase = widget.supabaseClient;
+    final user = supabase.auth.currentUser;
+    
+    // Store the context that has access to Scaffold
+    final scaffoldContext = context;
+    
+    if (user == null) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        const SnackBar(content: Text('Please sign in to add to playlist.')),
+      );
+      return;
+    }
+
+    // Fetch playlists for the user
+    List<Map<String, dynamic>> playlists = [];
+    try {
+      final data = await supabase
+          .from('playlist')
+          .select('id, playlist_name, image_url, user_id, description, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      playlists = List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+        SnackBar(content: Text('Error loading playlists: $e')),
+      );
+      return;
+    }
+
+    String? selectedPlaylistId;
+    final TextEditingController newPlaylistController = TextEditingController();
+    bool creatingNew = false;
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF23272A),
+              title: const Text('Add to Playlist', style: TextStyle(color: Colors.white)),
+              content: SizedBox(
+                width: 350,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!creatingNew) ...[
+                      if (playlists.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text('No playlists found. Create a new one!', style: TextStyle(color: Colors.white70)),
+                        ),
+                      if (playlists.isNotEmpty)
+                        ...playlists.map((playlist) => RadioListTile<String>(
+                              value: playlist['id'].toString(),
+                              groupValue: selectedPlaylistId,
+                              onChanged: (val) => setState(() => selectedPlaylistId = val),
+                              title: Text(playlist['playlist_name'] ?? 'Unnamed Playlist', style: const TextStyle(color: Colors.white)),
+                              subtitle: playlist['description'] != null && playlist['description'].toString().isNotEmpty
+                                  ? Text(playlist['description'], style: const TextStyle(color: Colors.white54, fontSize: 12))
+                                  : null,
+                              secondary: playlist['image_url'] != null
+                                  ? CircleAvatar(backgroundImage: NetworkImage(playlist['image_url']), radius: 18)
+                                  : const CircleAvatar(child: Icon(Icons.music_note)),
+                              activeColor: Colors.green,
+                            )),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: () => setState(() => creatingNew = true),
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text('Create New Playlist', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                    if (creatingNew) ...[
+                      TextField(
+                        controller: newPlaylistController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'Playlist name',
+                          hintStyle: TextStyle(color: Colors.white54),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                          focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () async {
+                                    if (newPlaylistController.text.trim().isEmpty) return;
+                                    setState(() => isLoading = true);
+                                    try {
+                                      final response = await supabase.from('playlists').insert({
+                                        'playlist_name': newPlaylistController.text.trim(),
+                                        'user_id': user.id,
+                                        'created_at': DateTime.now().toIso8601String(),
+                                      }).select().single();
+                                      playlists.insert(0, response);
+                                      selectedPlaylistId = response['id'].toString();
+                                      creatingNew = false;
+                                      newPlaylistController.clear();
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+                                        SnackBar(content: Text('Error creating playlist: $e')),
+                                      );
+                                    } finally {
+                                      setState(() => isLoading = false);
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                            child: isLoading
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Text('Create'),
+                          ),
+                          const SizedBox(width: 16),
+                          TextButton(
+                            onPressed: isLoading ? null : () => setState(() => creatingNew = false),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  onPressed: (selectedPlaylistId != null && !creatingNew && !isLoading)
+                      ? () async {
+                          setState(() => isLoading = true);
+                          try {
+                            // Insert song into playlist_songs table
+                            await supabase.from('playlist_songs').insert({
+                              'playlist_id': selectedPlaylistId,
+                              'song_id': song['id'],
+                              'added_at': DateTime.now().toIso8601String(),
+                            });
+                            Navigator.pop(dialogContext);
+                            ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+                              const SnackBar(content: Text('Song added to playlist!')),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+                              SnackBar(content: Text('Error adding to playlist: $e')),
+                            );
+                          } finally {
+                            setState(() => isLoading = false);
+                          }
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: isLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

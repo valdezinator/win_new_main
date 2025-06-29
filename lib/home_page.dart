@@ -49,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
   final BackblazeService _backblazeService = BackblazeService();
   final ListeningTimeService _listeningTimeService = ListeningTimeService();
+  final Map<String, Map<String, dynamic>> _songCache = {};
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -136,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final response = await supabaseClient
           .from('songs_2')
-          .select('id, title, artist, audio_url, image_url, duration') // 'song_lyrics' commented out
+          .select('id, title, artist, audio_url, image_url, duration')
           .order('created_at');
 
       if (response.isEmpty) {
@@ -144,7 +145,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
 
       print('Fetched ${(response as List).length} songs from songs_2 table');
-
+      // Cache songs
+      for (var song in response) {
+        _songCache[song['id'].toString()] = song;
+      }
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching songs: $e');
@@ -327,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     supabaseClient: supabaseClient,
                     onSongSelected: (song) {
                       setState(() => _currentSong = song);
-                      _audioService.playSong(song);
+                      _audioService.playSong(song, restorePosition: false);
                     },
                     currentlyPlayingSong: _currentSong,
                   ),
@@ -456,25 +460,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void playSong(Map<String, dynamic> song) async {
     try {
+      final songId = song['id'].toString();
+      Map<String, dynamic> songData = song;
+      if (_songCache.containsKey(songId)) {
+        songData = _songCache[songId]!;
+      }
       // Get the audio URL from Backblaze if needed
       final audioUrl = await _backblazeService.getAudioUrl(
-        song['audio_url'],
-        song['file_identifier'],
+        songData['audio_url'],
+        songData['file_identifier'],
       );
       print('Resolved audio URL: $audioUrl'); // Debug log
 
       // Create complete song context with queue
       final songWithContext = {
-        ...Map<String, dynamic>.from(song),
+        ...Map<String, dynamic>.from(songData),
         'queue': [], // Initialize empty queue if none exists
         'audio_url': audioUrl, // Use the resolved audio URL
-        'image_url': song['image_url'] ?? '', // Keep original image_url for now
-        'artist': song['artist'] ?? 'Unknown Artist',
-        'title': song['title'] ?? 'Unknown Title',
+        'image_url': songData['image_url'] ?? '', // Keep original image_url for now
+        'artist': songData['artist'] ?? 'Unknown Artist',
+        'title': songData['title'] ?? 'Unknown Title',
       };
 
       // Play the song
-      _audioService.playSong(songWithContext);
+      _audioService.playSong(songWithContext, restorePosition: false);
     } catch (e) {
       print('Error resolving audio URL: $e'); // Debug log
       if (mounted) {
@@ -620,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Quick Play Section
             QuickPlaySection(
               onSongSelected: (song) {
-                _audioService.playSong(song);
+                _audioService.playSong(song, restorePosition: false);
               },
             ),
             const SizedBox(height: 40),
