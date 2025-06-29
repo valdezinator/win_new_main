@@ -9,6 +9,7 @@ import 'privacy/privacy_policy_widgets.dart';
 import 'services/noise_detection_service.dart';
 import 'services/route_tracking_service.dart';
 import 'services/payment_service.dart';
+import 'services/auth_service.dart';
 import 'widgets/subscription_manager.dart';
 
 /// SettingsScreen: Comprehensive settings page for the music app
@@ -45,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   
   // Payment service
   final PaymentService _paymentService = PaymentService();
+  final AuthService _authService = AuthService();
   String? _email;
 
   // About
@@ -135,10 +137,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _fetchUserProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
     setState(() {
-      _username = user?.userMetadata?['username'] ?? '';
-      _email = user?.email ?? '';
+      _username = _authService.username;
+      _email = _authService.email;
     });
   }
 
@@ -161,9 +162,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _signOut() async {
-    await widget.supabaseClient.auth.signOut();
-    if (mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    try {
+      await _authService.signOut();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Signed out successfully'),
+            backgroundColor: Color(0xFF1DB954),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error signing out: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
