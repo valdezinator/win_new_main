@@ -32,7 +32,7 @@ class _QuickPlaySectionState extends State<QuickPlaySection> {
       final response = await Supabase.instance.client
           .from('songs_2')
           .select('id, title, artist, audio_url, image_url, duration')
-          .order('created_at');
+          .order('title');
 
       if (mounted) {
         setState(() {

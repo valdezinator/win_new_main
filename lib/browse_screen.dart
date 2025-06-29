@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'services/backblaze_service.dart';
 import 'services/analytics_service.dart';
+import 'layouts/content_view.dart'; // Import ContentViewController
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -1649,28 +1650,31 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   // Navigation methods
   void _navigateToAlbum(Map<String, dynamic> album) {
-    // Navigate to album view
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening album: ${album['title']}')),
+    // Navigate to album view using ContentViewController
+    ContentViewController().navigateTo(
+      ContentType.album,
+      data: album,
     );
   }
 
   void _navigateToArtist(Map<String, dynamic> artist) {
-    // Navigate to artist view
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening artist: ${artist['name']}')),
+    // Navigate to artist view using ContentViewController
+    ContentViewController().navigateTo(
+      ContentType.artist,
+      data: artist,
     );
   }
 
   void _navigateToPlaylist(Map<String, dynamic> playlist) {
-    // Navigate to playlist view
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening playlist: ${playlist['title']}')),
+    // Navigate to playlist view using ContentViewController
+    ContentViewController().navigateTo(
+      ContentType.playlist,
+      data: playlist,
     );
   }
 
   void _navigateToGenre(Map<String, dynamic> genre) {
-    // Navigate to genre view
+    // Navigate to genre view - for now just show a snackbar since genre view isn't implemented
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Opening genre: ${genre['name']}')),
     );

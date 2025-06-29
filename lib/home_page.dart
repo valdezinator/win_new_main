@@ -284,19 +284,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  // NEW: fetch new releases from a "new_releases" table or API
+  // NEW: fetch new releases from a "albums" table with category "album, new releases"
   Future<List<Map<String, dynamic>>> fetchNewReleases() async {
     try {
       final response = await supabaseClient
-          .from('new_releases')
-          .select()
+          .from('albums')
+          .select('*, id')
+          .eq('category', 'album, new releases')
           .order('release_date', ascending: false);
+
       if (response.isEmpty) {
         throw Exception('No new releases found');
       }
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      //print('Error fetching new releases: $e');
+      print('Error fetching new releases: $e');
       return [];
     }
   }
@@ -703,18 +706,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final releases = snapshot.data ?? [];
+                  final albums = snapshot.data ?? [];
                   return ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount: releases.length,
+                    itemCount: albums.length,
                     itemBuilder: (context, index) {
-                      final release = releases[index];
+                      final album = albums[index];
                       return Padding(
                         padding: const EdgeInsets.only(right: 16),
-                        child: NewReleaseItem(
-                          title: release['title'] ?? 'No Title',
-                          artist: release['artist'] ?? 'Unknown Artist',
-                          imageUrl: release['image_url'] ?? '',
+                        child: GestureDetector(
+                          onTap: () {
+                            ContentViewController().navigateTo(
+                              ContentType.album,
+                              data: {
+                                ...album,
+                                'id': album['id'], // Ensure ID is passed
+                                'title': album['title'] ?? 'Unknown Album',
+                                'artist': album['artist'] ?? 'Unknown Artist',
+                                'image_url': album['image_url'],
+                                'category': album['category'] ?? 'album'
+                              },
+                            );
+                          },
+                          child: NewReleaseItem(
+                            title: album['title'] ?? 'No Title',
+                            artist: album['artist'] ?? 'Unknown Artist',
+                            imageUrl: album['image_url'] ?? '',
+                            fileIdentifier: album['file_identifier'],
+                          ),
                         ),
                       );
                     },

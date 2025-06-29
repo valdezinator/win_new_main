@@ -381,7 +381,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                 songData = song;
             }
 
-            if (songData == null || songData['audio_url'] == null) {
+            // Don't filter out songs with null audio_url - show them but mark as not playable
+            if (songData == null) {
               return null;
             }
 
@@ -406,7 +407,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
               'id': songData['id'],
               'title': songData['title'] ?? 'Unknown Title',
               'artist': songData['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-              'audio_url': songData['audio_url'],
+              'audio_url': songData['audio_url'], // Can be null
               'image_url': imageUrl,
               'duration': songData['duration'],
               'position': song['position'], // For dynamic playlists
@@ -416,6 +417,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                       ? songData['image_identifier']
                       : 'images/${songData['image_identifier']}')
                   : null,
+              'is_playable': songData['audio_url'] != null, // Add flag to indicate if song is playable
             };
           })
           .where((song) => song != null)
@@ -451,17 +453,36 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
 
   void _playAll() {
     if (songs.isNotEmpty) {
-      currentPlayingIndex = 0;
-      _playSong(songs[0]);
+      // Find the first playable song
+      final playableSong = songs.firstWhere(
+        (song) => song['is_playable'] ?? true,
+        orElse: () => songs.first, // Fallback to first song if none are playable
+      );
+      
+      currentPlayingIndex = songs.indexOf(playableSong);
+      _playSong(playableSong);
     }
   }
 
   void _playSong(Map<String, dynamic> song) async {
-    // If the song is downloaded, play as usual
+    // Check if song is playable
     if (song['audio_url'] == null && !_isDownloaded) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot play song: Missing audio URL')),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.block, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('Cannot play: ${song['title']} - Audio not available'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         );
       }
       return;
@@ -676,16 +697,16 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                         _buildFavoriteButton(),
                         const SizedBox(width: 16),
                         _buildAlbumMoreOptionsMenu(),
-                        const Spacer(), // Pushes queue button to the right
-                        IconButton(
-                          icon: const Icon(Icons.queue_music, color: Colors.white),
-                          tooltip: 'Show Queue',
-                          onPressed: () {
-                            setState(() {
-                              showQueue = !showQueue;
-                            });
-                          },
-                        ),
+                        // const Spacer(), // Pushes queue button to the right
+                        // IconButton(
+                        //   icon: const Icon(Icons.queue_music, color: Colors.white),
+                        //   tooltip: 'Show Queue',
+                        //   onPressed: () {
+                        //     setState(() {
+                        //       showQueue = !showQueue;
+                        //     });
+                        //   },
+                        // ),
                       ],
                     ),
                   ],
@@ -1106,6 +1127,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   Widget _buildSongRow(MapEntry<int, Map<String, dynamic>> entry) {
     final isCurrentSong = currentPlayingIndex != null && currentPlayingIndex == entry.key;
     final isHovered = hoveredIndex == entry.key;
+    final isPlayable = entry.value['is_playable'] ?? true; // Default to true for backward compatibility
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -1123,7 +1145,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _playSong(entry.value),
+          onTap: isPlayable ? () => _playSong(entry.value) : null, // Disable tap for non-playable songs
           onHover: (hover) {
             setState(() {
               hoveredIndex = hover ? entry.key : null;
@@ -1138,7 +1160,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                 child: Text(
                   '${entry.key + 1}',
                   style: TextStyle(
-                    color: isCurrentSong ? Colors.green : Colors.white70,
+                    color: isCurrentSong ? Colors.green : (isPlayable ? Colors.white70 : Colors.grey[600]),
                     fontSize: 16,
                   ),
                   textAlign: TextAlign.center,
@@ -1213,6 +1235,24 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                         ),
                       ),
                     ),
+                  // Show "Not Available" indicator for non-playable songs
+                  if (!isPlayable)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(
+                          Icons.block,
+                          color: Colors.red,
+                          size: 12,
+                        ),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(width: 16),
@@ -1224,8 +1264,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                   children: [
                     Text(
                       entry.value['title'] ?? 'Unknown',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: isPlayable ? Colors.white : Colors.grey[600],
                         fontSize: 14,
                       ),
                       maxLines: 1,
@@ -1234,13 +1274,25 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                     const SizedBox(height: 4),
                     Text(
                       entry.value['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: isPlayable ? Colors.white70 : Colors.grey[500],
                         fontSize: 12,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    // Show "Audio not available" message for non-playable songs
+                    if (!isPlayable)
+                      Text(
+                        'Audio not available',
+                        style: TextStyle(
+                          color: Colors.red[400],
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
               ),
@@ -1249,8 +1301,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                 width: 80,
                 child: Text(
                   _formatDuration(entry.value['duration']),
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: isPlayable ? Colors.white70 : Colors.grey[600],
                     fontSize: 14,
                   ),
                   textAlign: TextAlign.center,

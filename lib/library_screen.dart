@@ -7,6 +7,7 @@ import 'dart:io'; // Import for File
 import 'package:file_picker/file_picker.dart'; // Import file_picker
 import 'dart:ui'; // Import for BackdropFilter
 import 'package:shimmer/shimmer.dart';
+import 'layouts/content_view.dart'; // Import ContentViewController
 
 class LibraryScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -787,16 +788,9 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                       if (widget.onAlbumSelected != null) {
                         widget.onAlbumSelected!(playlist);
                       } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AlbumView(
-                              album: playlist,
-                              supabaseClient: widget.supabaseClient,
-                              onSongSelected: (song) {},
-                              currentlyPlayingSong: widget.currentlyPlayingSong,
-                            ),
-                          ),
+                        ContentViewController().navigateTo(
+                          ContentType.playlist,
+                          data: playlist,
                         );
                       }
                     },
@@ -980,16 +974,9 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                       if (widget.onAlbumSelected != null) {
                         widget.onAlbumSelected!(playlist);
                       } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AlbumView(
-                              album: playlist,
-                              supabaseClient: widget.supabaseClient,
-                              onSongSelected: (song) {},
-                              currentlyPlayingSong: widget.currentlyPlayingSong,
-                            ),
-                          ),
+                        ContentViewController().navigateTo(
+                          ContentType.playlist,
+                          data: playlist,
                         );
                       }
                     },
@@ -1342,24 +1329,11 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                                   borderRadius: BorderRadius.circular(8),
                                   onTap: _createAIPlaylist,
                                   child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.auto_awesome,
-                                          color: Colors.deepPurple,
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'AI Playlist',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
+                                    padding: EdgeInsets.all(12),
+                                    child: Icon(
+                                      Icons.auto_awesome,
+                                      color: Colors.deepPurple,
+                                      size: 20,
                                     ),
                                   ),
                                 ),
@@ -1371,16 +1345,24 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
 
                           // Create playlist button (only show for playlists tab)
                           if (_currentTabIndex == 0)
-                            ElevatedButton.icon(
-                              onPressed: _showCreatePlaylistDialog,
-                              icon: const Icon(Icons.add),
-                              label: const Text('Create Playlist'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                shape: RoundedRectangleBorder(
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
                                   borderRadius: BorderRadius.circular(8),
+                                  onTap: _showCreatePlaylistDialog,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Icon(
+                                      Icons.add,
+                                      color: Colors.black,
+                                      size: 20,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
