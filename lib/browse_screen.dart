@@ -636,149 +636,210 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         }
       },
       cursor: SystemMouseCursors.click,
-      child: Container(
-        margin: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
-        decoration: BoxDecoration(
-          color: isKeyboardSelected
-              ? Colors.green.withOpacity(0.15)
-              : isHovered
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: ListTile(
-          dense: compact,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: compact ? 4 : 8,
-          ),
-          shape: RoundedRectangleBorder(
+      child: GestureDetector(
+        onSecondaryTapDown: (details) async {
+          final selected = await showMenu<String>(
+            context: context,
+            position: RelativeRect.fromLTRB(
+              details.globalPosition.dx,
+              details.globalPosition.dy,
+              details.globalPosition.dx + 1,
+              details.globalPosition.dy + 1,
+            ),
+            items: [
+              const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
+              const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
+              const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
+              const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
+              const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
+            ],
+          );
+          if (selected == 'play') {
+            _playSearchResult(song);
+          } else if (selected == 'add_to_queue') {
+            _addToQueue(song);
+          } else if (selected == 'add_to_playlist') {
+            _showAddToPlaylistDialog(song);
+          } else if (selected == 'view_album') {
+            _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
+          } else if (selected == 'view_artist') {
+            _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
+          }
+        },
+        child: Container(
+          margin: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
+          decoration: BoxDecoration(
+            color: isKeyboardSelected
+                ? Colors.green.withOpacity(0.15)
+                : isHovered
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
-          leading: SizedBox(
-            width: compact ? 40 : 48,
-            height: compact ? 40 : 48,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: FutureBuilder<String>(
-                    future: _backblazeService.getImageUrl(
-                      song['image_url'],
-                      song['file_identifier'],
+          child: ListTile(
+            dense: compact,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: compact ? 4 : 8,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            leading: SizedBox(
+              width: compact ? 40 : 48,
+              height: compact ? 40 : 48,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: FutureBuilder<String>(
+                      future: _backblazeService.getImageUrl(
+                        song['image_url'],
+                        song['file_identifier'],
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: Icon(
+                              Icons.music_note,
+                              color: Colors.white,
+                              size: compact ? 20 : 24,
+                            ),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          return Container(
+                            color: Colors.grey[850],
+                            child: Icon(
+                              Icons.music_note,
+                              color: Colors.white,
+                              size: compact ? 20 : 24,
+                            ),
+                          );
+                        }
+                        return Image.network(
+                          snapshot.data!,
+                          width: compact ? 40 : 48,
+                          height: compact ? 40 : 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[850],
+                            child: Icon(
+                              Icons.music_note,
+                              color: Colors.white,
+                              size: compact ? 20 : 24,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Container(
-                          color: Colors.grey[850],
-                          child: Icon(
-                            Icons.music_note,
-                            color: Colors.white,
-                            size: compact ? 20 : 24,
-                          ),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return Container(
-                          color: Colors.grey[850],
-                          child: Icon(
-                            Icons.music_note,
-                            color: Colors.white,
-                            size: compact ? 20 : 24,
-                          ),
-                        );
-                      }
-                      return Image.network(
-                        snapshot.data!,
-                        width: compact ? 40 : 48,
-                        height: compact ? 40 : 48,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey[850],
-                          child: Icon(
-                            Icons.music_note,
-                            color: Colors.white,
-                            size: compact ? 20 : 24,
-                          ),
+                  ),
+                  if (isCurrentlyPlaying)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                      );
-                    },
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.green,
+                          size: compact ? 20 : 24,
+                        ),
+                      ),
+                    ),
+                  if (isHovered && !isCurrentlyPlaying)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: compact ? 20 : 24,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            title: _highlightMatch(song['title'] ?? '', _searchController.text),
+            subtitle: _highlightMatch(song['artist'] ?? 'Unknown Artist', _searchController.text),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isHovered && !compact)
+                  IconButton(
+                    icon: Icon(
+                      Icons.favorite_border,
+                      color: Colors.grey[400],
+                      size: 20,
+                    ),
+                    onPressed: () {},
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 20,
+                  ),
+                if (isHovered && !compact)
+                  const SizedBox(width: 16),
+                Text(
+                  _formatDuration(song['duration']),
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: compact ? 12 : 14,
                   ),
                 ),
-                if (isCurrentlyPlaying)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Icon(
-                        Icons.play_arrow,
-                        color: Colors.green,
-                        size: compact ? 20 : 24,
-                      ),
+                if (isHovered) ...[
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: Icon(
+                      Icons.more_horiz,
+                      color: Colors.grey[400],
+                      size: compact ? 16 : 20,
                     ),
+                    onPressed: () async {
+                      final RenderBox box = context.findRenderObject() as RenderBox;
+                      final Offset position = box.localToGlobal(Offset.zero);
+                      final selected = await showMenu<String>(
+                        context: context,
+                        position: RelativeRect.fromLTRB(
+                          position.dx + 40,
+                          position.dy + 40,
+                          position.dx + 41,
+                          position.dy + 41,
+                        ),
+                        items: [
+                          const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
+                          const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
+                          const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
+                          const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
+                          const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
+                        ],
+                      );
+                      if (selected == 'play') {
+                        _playSearchResult(song);
+                      } else if (selected == 'add_to_queue') {
+                        _addToQueue(song);
+                      } else if (selected == 'add_to_playlist') {
+                        _showAddToPlaylistDialog(song);
+                      } else if (selected == 'view_album') {
+                        _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
+                      } else if (selected == 'view_artist') {
+                        _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
+                      }
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: compact ? 16 : 20,
                   ),
-                if (isHovered && !isCurrentlyPlaying)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: compact ? 20 : 24,
-                      ),
-                    ),
-                  ),
+                ],
               ],
             ),
+            onTap: () => _playSearchResult(song),
           ),
-          title: _highlightMatch(song['title'] ?? '', _searchController.text),
-          subtitle: _highlightMatch(song['artist'] ?? 'Unknown Artist', _searchController.text),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isHovered && !compact)
-                IconButton(
-                  icon: Icon(
-                    Icons.favorite_border,
-                    color: Colors.grey[400],
-                    size: 20,
-                  ),
-                  onPressed: () {},
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  splashRadius: 20,
-                ),
-              if (isHovered && !compact)
-                const SizedBox(width: 16),
-              Text(
-                _formatDuration(song['duration']),
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: compact ? 12 : 14,
-                ),
-              ),
-              if (isHovered) ...[
-                const SizedBox(width: 16),
-                IconButton(
-                  icon: Icon(
-                    Icons.more_horiz,
-                    color: Colors.grey[400],
-                    size: compact ? 16 : 20,
-                  ),
-                  onPressed: () {},
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  splashRadius: compact ? 16 : 20,
-                ),
-              ],
-            ],
-          ),
-          onTap: () => _playSearchResult(song),
         ),
       ),
     );
@@ -980,8 +1041,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       return _buildShimmerLoader();
     }
 
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1061,8 +1125,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             }
             return const SizedBox.shrink();
           }),
-
-          const SizedBox(height: 100), // Space for player
         ],
       ),
     );
@@ -1145,7 +1207,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Widget _buildAlbumGrid(List<Map<String, dynamic>> albums) {
     return SizedBox(
-      height: 200,
+      height: 240,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: albums.length,
@@ -1179,7 +1241,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return Container(
                             width: 160,
-                            height: 160,
+                            height: 180,
                             color: Colors.grey[850],
                             child: const Icon(Icons.album, size: 60, color: Colors.white),
                           );
@@ -1187,7 +1249,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         if (snapshot.hasError || !snapshot.hasData) {
                           return Container(
                             width: 160,
-                            height: 160,
+                            height: 180,
                             color: Colors.grey[850],
                             child: const Icon(Icons.album, size: 60, color: Colors.white),
                           );
@@ -1195,11 +1257,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         return Image.network(
                           snapshot.data!,
                           width: 160,
-                          height: 160,
+                          height: 180,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             width: 160,
-                            height: 160,
+                            height: 180,
                             color: Colors.grey[850],
                             child: const Icon(Icons.album, size: 60, color: Colors.white),
                           ),
@@ -1366,7 +1428,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Widget _buildArtistGrid(List<Map<String, dynamic>> artists) {
     return SizedBox(
-      height: 180,
+      height: 220,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: artists.length,
@@ -1387,17 +1449,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             Stack(
               children: [
                 CircleAvatar(
-                  radius: 50,
+                  radius: 60,
                   backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
                   backgroundColor: Colors.grey[850],
-                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 60, color: Colors.white) : null,
                 ),
                 Positioned.fill(
                   child: Material(
                     color: Colors.transparent,
                     shape: const CircleBorder(),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(50),
+                      borderRadius: BorderRadius.circular(60),
                       onTap: () => _navigateToArtist(artist),
                     ),
                   ),
@@ -1428,7 +1490,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
   Widget _buildPlaylistGrid(List<Map<String, dynamic>> playlists) {
     return SizedBox(
-      height: 200,
+      height: 240,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: playlists.length,
@@ -1455,7 +1517,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 160,
-                      height: 160,
+                      height: 180,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
@@ -1615,9 +1677,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   Widget _buildShimmerLoader() {
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     // Simple shimmer/skeleton loader for search results
     return ListView.builder(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       itemCount: 6,
       itemBuilder: (context, index) => Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1681,8 +1746,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   Widget _buildAllResultsTab() {
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1792,8 +1860,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               )
             ),
           ],
-
-          const SizedBox(height: 100), // Space for player
         ],
       ),
     );
@@ -1808,8 +1874,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
 
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     return ListView.builder(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       itemCount: songs.length,
       itemBuilder: (context, index) {
         return _buildSearchResult(
@@ -1830,8 +1899,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
 
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     return GridView.builder(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         childAspectRatio: 0.8,
@@ -1854,8 +1926,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
 
+    // Calculate bottom padding based on whether music player is visible
+    final bottomPadding = widget.currentlyPlayingSong != null ? 120.0 : 24.0;
+
     return GridView.builder(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, bottomPadding),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 5,
         childAspectRatio: 0.8,
@@ -2157,5 +2232,200 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       );
     }
     return const SizedBox.shrink();
+  }
+
+  void _addToQueue(Map<String, dynamic> song) {
+    // Add the song after the current song in the queue
+    if (widget.currentlyPlayingSong == null) {
+      // No song is currently playing, just play this song
+      _playSearchResult(song);
+      return;
+    }
+    final currentQueue = List<Map<String, dynamic>>.from(widget.currentlyPlayingSong!['queue'] ?? []);
+    final currentSongId = widget.currentlyPlayingSong!['id'];
+    final currentIndex = currentQueue.indexWhere((s) => s['id'] == currentSongId);
+    if (currentIndex == -1) {
+      // Fallback: append to end
+      currentQueue.add(song);
+    } else {
+      currentQueue.insert(currentIndex + 1, song);
+    }
+    // Update the queue and keep the current song playing
+    final updatedSong = {
+      ...widget.currentlyPlayingSong!,
+      'queue': currentQueue,
+    };
+    widget.onSongSelected(updatedSong);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Added to queue')),
+    );
+  }
+
+  void _showAddToPlaylistDialog(Map<String, dynamic> song) async {
+    final supabase = widget.supabaseClient;
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to add to playlist.')),
+      );
+      return;
+    }
+
+    // Fetch playlists for the user
+    List<Map<String, dynamic>> playlists = [];
+    try {
+      final data = await supabase
+          .from('playlist')
+          .select('id, playlist_name, image_url, user_id, description, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      playlists = List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading playlists: $e')),
+      );
+      return;
+    }
+
+    String? selectedPlaylistId;
+    final TextEditingController newPlaylistController = TextEditingController();
+    bool creatingNew = false;
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF23272A),
+              title: const Text('Add to Playlist', style: TextStyle(color: Colors.white)),
+              content: SizedBox(
+                width: 350,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!creatingNew) ...[
+                      if (playlists.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text('No playlists found. Create a new one!', style: TextStyle(color: Colors.white70)),
+                        ),
+                      if (playlists.isNotEmpty)
+                        ...playlists.map((playlist) => RadioListTile<String>(
+                              value: playlist['id'].toString(),
+                              groupValue: selectedPlaylistId,
+                              onChanged: (val) => setState(() => selectedPlaylistId = val),
+                              title: Text(playlist['playlist_name'] ?? 'Unnamed Playlist', style: const TextStyle(color: Colors.white)),
+                              subtitle: playlist['description'] != null && playlist['description'].toString().isNotEmpty
+                                  ? Text(playlist['description'], style: const TextStyle(color: Colors.white54, fontSize: 12))
+                                  : null,
+                              secondary: playlist['image_url'] != null
+                                  ? CircleAvatar(backgroundImage: NetworkImage(playlist['image_url']), radius: 18)
+                                  : const CircleAvatar(child: Icon(Icons.music_note)),
+                              activeColor: Colors.green,
+                            )),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: () => setState(() => creatingNew = true),
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text('Create New Playlist', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                    if (creatingNew) ...[
+                      TextField(
+                        controller: newPlaylistController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'Playlist name',
+                          hintStyle: TextStyle(color: Colors.white54),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                          focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.green)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () async {
+                                    if (newPlaylistController.text.trim().isEmpty) return;
+                                    setState(() => isLoading = true);
+                                    try {
+                                      final response = await supabase.from('playlists').insert({
+                                        'playlist_name': newPlaylistController.text.trim(),
+                                        'user_id': user.id,
+                                        'created_at': DateTime.now().toIso8601String(),
+                                      }).select().single();
+                                      playlists.insert(0, response);
+                                      selectedPlaylistId = response['id'].toString();
+                                      creatingNew = false;
+                                      newPlaylistController.clear();
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error creating playlist: $e')),
+                                      );
+                                    } finally {
+                                      setState(() => isLoading = false);
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                            child: isLoading
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Text('Create'),
+                          ),
+                          const SizedBox(width: 16),
+                          TextButton(
+                            onPressed: isLoading ? null : () => setState(() => creatingNew = false),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  onPressed: (selectedPlaylistId != null && !creatingNew && !isLoading)
+                      ? () async {
+                          setState(() => isLoading = true);
+                          try {
+                            // Insert song into playlist_songs table
+                            await supabase.from('playlist_songs').insert({
+                              'playlist_id': selectedPlaylistId,
+                              'song_id': song['id'],
+                              'added_at': DateTime.now().toIso8601String(),
+                            });
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Song added to playlist!')),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error adding to playlist: $e')),
+                            );
+                          } finally {
+                            setState(() => isLoading = false);
+                          }
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: isLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
