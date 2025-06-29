@@ -2682,7 +2682,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
 
     try {
       final response = await widget.supabaseClient
-          .from('playlist')
+          .from('playlist')  // Changed to 'playlist' to match DB schema
           .select('id, playlist_name, description, image_url, created_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
@@ -3131,7 +3131,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     List<Map<String, dynamic>> playlists = [];
     try {
       final data = await supabase
-          .from('playlist')
+          .from('playlist')  // Changed to 'playlist' to match DB schema
           .select('id, playlist_name, image_url, user_id, description, created_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
@@ -3210,10 +3210,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                                     if (newPlaylistController.text.trim().isEmpty) return;
                                     setState(() => isLoading = true);
                                     try {
-                                      final response = await supabase.from('playlists').insert({
+                                      final response = await supabase.from('playlist').insert({
                                         'playlist_name': newPlaylistController.text.trim(),
                                         'user_id': user.id,
                                         'created_at': DateTime.now().toIso8601String(),
+                                        'type': 'user_created', // Add the required type field
                                       }).select().single();
                                       playlists.insert(0, response);
                                       selectedPlaylistId = response['id'].toString();

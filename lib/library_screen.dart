@@ -148,7 +148,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
       }
 
       final data = await widget.supabaseClient
-          .from('playlist')  // Changed back to 'playlist' as shown in policies
+          .from('playlist')  // Changed to 'playlist' to match DB schema
           .select('id, playlist_name, image_url, user_id, description, created_at')
           .eq('user_id', _currentUserId!)
           .order('created_at', ascending: false);
@@ -372,16 +372,53 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
           imageUrl = await _uploadImage(_playlistCoverImage!);
         }
 
-        await client.from('playlists').insert({  // Changed from 'playlist' to 'playlists'
+        final result = await client.from('playlist').insert({
           'playlist_name': playlistName,
           'description': description,
           'user_id': _currentUserId!,
-          'image_url': imageUrl,
+          'image_url': imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/300x300/1DB954/FFFFFF?text=Playlist',
           'created_at': DateTime.now().toIso8601String(),
+          'type': 'user_created',
+        }).select();
+
+        print('Playlist created successfully: $result');
+        
+        // Reset the cover image
+        setState(() {
+          _playlistCoverImage = null;
         });
-        setState(() {}); // Refresh the list
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist created successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } catch (e) {
-        //print('Error creating playlist: $e');
+        print('Error creating playlist: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating playlist: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a playlist name'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -546,13 +583,14 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
         }
 
         final playlistData = await widget.supabaseClient
-            .from('playlist')
+            .from('playlist')  // Changed to 'playlist' to match DB schema
             .insert({
               'playlist_name': 'AI: ${description.length > 30 ? description.substring(0, 27) + '...' : description}',
               'user_id': user.id,
               'description': description,
               'image_url': 'https://path.to/default/ai/playlist/image.jpg',
               'is_ai_generated': true,
+              'type': 'ai_generated', // Add the required type field
             })
             .select()
             .single();
@@ -649,7 +687,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   void _deletePlaylist() async {
     if (_selectedPlaylist != null) {
       final response = await widget.supabaseClient
-          .from('playlists')  // Changed from 'playlist' to 'playlists'
+          .from('playlist')  // Changed from 'playlists' to 'playlist'
           .delete()
           .eq('id', _selectedPlaylist!['id']);
 
