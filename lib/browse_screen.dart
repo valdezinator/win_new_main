@@ -1485,7 +1485,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 160,
-                      height: 180,
+                      height: 160,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
