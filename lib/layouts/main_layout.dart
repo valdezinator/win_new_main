@@ -17,10 +17,18 @@ class MainLayout extends StatefulWidget {
   final Function(int) onNavItemSelected;
   final bool showQueue;
   final Function(bool) onQueueToggle;
+  final bool showLyrics;
+  final Function({required String? lyrics, String? translatedLyrics, required Duration currentPosition, required Duration totalDuration, required Color accentColor}) openLyricsPanel;
+  final VoidCallback closeLyricsPanel;
+  final String? lyrics;
+  final String? translatedLyrics;
+  final Duration lyricsCurrentPosition;
+  final Duration lyricsTotalDuration;
+  final Color lyricsAccentColor;
+  final Function(List<Map<String, dynamic>>)? onQueueReordered;
 
   const MainLayout({
     super.key,
-    required this.child,
     required this.currentIndex,
     this.currentSong,
     required this.audioService,
@@ -28,6 +36,16 @@ class MainLayout extends StatefulWidget {
     required this.onNavItemSelected,
     this.showQueue = false,
     required this.onQueueToggle,
+    required this.showLyrics,
+    required this.openLyricsPanel,
+    required this.closeLyricsPanel,
+    this.lyrics,
+    this.translatedLyrics,
+    this.lyricsCurrentPosition = Duration.zero,
+    this.lyricsTotalDuration = Duration.zero,
+    this.lyricsAccentColor = Colors.green,
+    this.onQueueReordered,
+    required this.child,
   });
 
   @override
@@ -147,20 +165,27 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
               bottom: 0,
               child: MusicPlayer(
                 song: widget.currentSong!,
-                onQueueToggle: widget.onQueueToggle,
-                showQueue: widget.showQueue,                onShowLyrics: ({
+                onQueueToggle: (show) {
+                  if (show) widget.closeLyricsPanel(); // Only one open at a time
+                  widget.onQueueToggle(show);
+                },
+                showQueue: widget.showQueue,
+                onShowLyrics: ({
                   required Duration currentPosition,
                   required Duration totalDuration,
                   required Color accentColor,
                   String? lyrics,
                   String? translatedLyrics,
-                }) => openLyricsPanel(
-                  lyrics: lyrics,
-                  translatedLyrics: translatedLyrics,
-                  currentPosition: currentPosition,
-                  totalDuration: totalDuration,
-                  accentColor: accentColor,
-                ),
+                }) {
+                  widget.openLyricsPanel(
+                    lyrics: lyrics,
+                    translatedLyrics: translatedLyrics,
+                    currentPosition: currentPosition,
+                    totalDuration: totalDuration,
+                    accentColor: accentColor,
+                  );
+                  widget.onQueueToggle(false); // Only one open at a time
+                },
               ),
             ),
 
@@ -174,21 +199,22 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
                 currentSong: widget.currentSong!,
                 onClose: () => widget.onQueueToggle(false),
                 onSongSelected: widget.onSongSelected,
+                onQueueReordered: widget.onQueueReordered,
               ),
             ),
 
           // Lyrics overlay (top-level)
-          if (_showLyrics)
+          if (widget.showLyrics)
             Positioned(
               top: 0,
               right: 0,
               bottom: 80, // Height of the MusicPlayer
               width: 340,
               child: IgnorePointer(
-                ignoring: !_showLyrics,
+                ignoring: !widget.showLyrics,
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 200),
-                  opacity: _showLyrics ? 1.0 : 0.0,
+                  opacity: widget.showLyrics ? 1.0 : 0.0,
                   child: Material(
                     elevation: 16,
                     borderRadius: BorderRadius.circular(12),
@@ -214,12 +240,12 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
                       child: Stack(
                         children: [                          Positioned.fill(
                             child: LyricsPanel(
-                              lyrics: _lyrics,
-                              translatedLyrics: _translatedLyrics,
-                              onClose: closeLyricsPanel,
-                              currentPosition: _lyricsCurrentPosition,
-                              totalDuration: _lyricsTotalDuration,
-                              accentColor: _lyricsAccentColor,
+                              lyrics: widget.lyrics,
+                              translatedLyrics: widget.translatedLyrics,
+                              onClose: widget.closeLyricsPanel,
+                              currentPosition: widget.lyricsCurrentPosition,
+                              totalDuration: widget.lyricsTotalDuration,
+                              accentColor: widget.lyricsAccentColor,
                             ),
                           ),
                           Positioned(
@@ -227,7 +253,7 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
                             right: 8,
                             child: IconButton(
                               icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
-                              onPressed: closeLyricsPanel,
+                              onPressed: widget.closeLyricsPanel,
                             ),
                           ),
                         ],

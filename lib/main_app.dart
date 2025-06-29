@@ -21,8 +21,14 @@ class _MainAppState extends State<MainApp> {
   final AudioService _audioService = AudioService();
   Map<String, dynamic>? _currentSong;
   bool _showQueue = false;
+  bool _showLyrics = false;
   ContentType _currentContentType = ContentType.home;
   Map<String, dynamic>? _contentData;
+  String? _lyrics;
+  String? _translatedLyrics;
+  Duration _lyricsCurrentPosition = Duration.zero;
+  Duration _lyricsTotalDuration = Duration.zero;
+  Color _lyricsAccentColor = Colors.green;
 
   @override
   void initState() {
@@ -60,6 +66,43 @@ class _MainAppState extends State<MainApp> {
   void _toggleQueue(bool show) {
     setState(() {
       _showQueue = show;
+      if (show) _showLyrics = false;
+    });
+  }
+
+  void _openLyricsPanel({
+    required String? lyrics,
+    String? translatedLyrics,
+    required Duration currentPosition,
+    required Duration totalDuration,
+    required Color accentColor,
+  }) {
+    setState(() {
+      _showLyrics = true;
+      _showQueue = false;
+      _lyrics = lyrics;
+      _translatedLyrics = translatedLyrics;
+      _lyricsCurrentPosition = currentPosition;
+      _lyricsTotalDuration = totalDuration;
+      _lyricsAccentColor = accentColor;
+    });
+  }
+
+  void _closeLyricsPanel() {
+    setState(() {
+      _showLyrics = false;
+    });
+  }
+
+  void _onQueueReordered(List<Map<String, dynamic>> newQueue) {
+    if (_currentSong == null) return;
+    final updatedSong = {
+      ..._currentSong!,
+      'queue': newQueue,
+    };
+    _audioService.playSong(updatedSong);
+    setState(() {
+      _currentSong = updatedSong;
     });
   }
 
@@ -174,6 +217,15 @@ class _MainAppState extends State<MainApp> {
       },
       showQueue: _showQueue,
       onQueueToggle: _toggleQueue,
+      showLyrics: _showLyrics,
+      openLyricsPanel: _openLyricsPanel,
+      closeLyricsPanel: _closeLyricsPanel,
+      lyrics: _lyrics,
+      translatedLyrics: _translatedLyrics,
+      lyricsCurrentPosition: _lyricsCurrentPosition,
+      lyricsTotalDuration: _lyricsTotalDuration,
+      lyricsAccentColor: _lyricsAccentColor,
+      onQueueReordered: _onQueueReordered,
       child: content,
     );
 

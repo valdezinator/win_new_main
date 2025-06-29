@@ -10,6 +10,7 @@ class QueueList extends StatefulWidget {
   final VoidCallback onClose;
   final Function(Map<String, dynamic>)? onSongSelected;
   final String userName; // Added for jam session host name
+  final Function(List<Map<String, dynamic>>)? onQueueReordered; // NEW: callback for reordering
 
   const QueueList({
     super.key,
@@ -17,6 +18,7 @@ class QueueList extends StatefulWidget {
     required this.onClose,
     this.onSongSelected,
     this.userName = 'User', // Default value if not provided
+    this.onQueueReordered, // NEW
   });
 
   @override
@@ -427,16 +429,32 @@ class _QueueListState extends State<QueueList> {
                   ),
                 ),
                 Expanded( // Make the "Next Up" list scrollable
-                  child: ListView.builder(
-                    controller: _scrollController,
+                  child: ReorderableListView.builder(
                     itemCount: nextUpQueue.length,
-                    itemBuilder: (context, index) {
-                      final song = nextUpQueue[index];
-                      return _buildSongItem(song, false, hoveredIndex == song['id'].hashCode, onTap: () {
-                        if (widget.onSongSelected != null) {
-                          widget.onSongSelected!(song);
+                    buildDefaultDragHandles: false,
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        final item = nextUpQueue.removeAt(oldIndex);
+                        nextUpQueue.insert(newIndex, item);
+                        // Rebuild the full queue: nowPlayingSong + nextUpQueue
+                        final fullQueue = [if (nowPlayingSong != null) nowPlayingSong!, ...nextUpQueue];
+                        if (widget.onQueueReordered != null) {
+                          widget.onQueueReordered!(fullQueue);
                         }
                       });
+                    },
+                    itemBuilder: (context, index) {
+                      final song = nextUpQueue[index];
+                      return ReorderableDragStartListener(
+                        key: ValueKey(song['id'] ?? index),
+                        index: index,
+                        child: _buildSongItem(song, false, hoveredIndex == song['id'].hashCode, onTap: () {
+                          if (widget.onSongSelected != null) {
+                            widget.onSongSelected!(song);
+                          }
+                        }),
+                      );
                     },
                   ),
                 ),
