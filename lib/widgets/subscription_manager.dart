@@ -52,58 +52,165 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
         // If we can't get plans from the database, use demo plans
         plans = [
           PremiumPlan(
-            id: 'monthly_premium',
-            name: 'Premium Monthly',
-            description: 'Unlimited access to all premium features with monthly billing',
-            price: 9.99,
+            id: 'family',
+            name: 'Family',
+            description: 'For the whole family',
+            price: 19.99,
             currency: 'USD',
             billingInterval: BillingInterval.monthly,
             includedFeatures: [
               PremiumFeature(
+                id: 'accounts',
+                name: 'Up to 6 Premium accounts',
+                description: 'For the whole family',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'explicit_control',
+                name: 'Control content marked as explicit',
+                description: 'Parental controls for explicit content',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'cancel_anytime',
+                name: 'Cancel anytime',
+                description: 'Cancel your subscription anytime',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'subscribe_or_one_time',
+                name: 'Subscribe or one-time payment',
+                description: 'Flexible payment options',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'ad_free',
+                name: 'Ad-free music listening',
+                description: 'Enjoy music without interruptions',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
                 id: 'offline',
-                name: 'Offline Listening',
+                name: 'Download songs for offline',
                 description: 'Download music for offline listening',
                 tier: FeatureTier.premium,
               ),
               PremiumFeature(
                 id: 'hq_audio',
-                name: 'High-Quality Audio',
+                name: 'High quality audio',
                 description: 'Stream in high-quality up to 320kbps',
                 tier: FeatureTier.premium,
               ),
               PremiumFeature(
-                id: 'no_ads',
-                name: 'Ad-Free',
-                description: 'Enjoy music without interruptions',
+                id: 'unlimited_skips',
+                name: 'Unlimited skips',
+                description: 'Skip as many songs as you want',
                 tier: FeatureTier.premium,
               ),
             ],
             isActive: true,
           ),
           PremiumPlan(
-            id: 'yearly_premium',
-            name: 'Premium Yearly',
-            description: 'Unlimited access to all premium features with yearly billing (2 months free)',
-            price: 99.99,
+            id: 'duo',
+            name: 'Duo',
+            description: 'Perfect for couples',
+            price: 14.99,
             currency: 'USD',
-            billingInterval: BillingInterval.yearly,
+            billingInterval: BillingInterval.monthly,
             includedFeatures: [
               PremiumFeature(
+                id: 'accounts',
+                name: '2 Premium accounts',
+                description: 'For two people',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'cancel_anytime',
+                name: 'Cancel anytime',
+                description: 'Cancel your subscription anytime',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'subscribe_or_one_time',
+                name: 'Subscribe or one-time payment',
+                description: 'Flexible payment options',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'ad_free',
+                name: 'Ad-free music listening',
+                description: 'Enjoy music without interruptions',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
                 id: 'offline',
-                name: 'Offline Listening',
+                name: 'Download songs for offline',
                 description: 'Download music for offline listening',
                 tier: FeatureTier.premium,
               ),
               PremiumFeature(
                 id: 'hq_audio',
-                name: 'High-Quality Audio',
+                name: 'High quality audio',
                 description: 'Stream in high-quality up to 320kbps',
                 tier: FeatureTier.premium,
               ),
               PremiumFeature(
-                id: 'no_ads',
-                name: 'Ad-Free',
+                id: 'unlimited_skips',
+                name: 'Unlimited skips',
+                description: 'Skip as many songs as you want',
+                tier: FeatureTier.premium,
+              ),
+            ],
+            isActive: true,
+          ),
+          PremiumPlan(
+            id: 'single',
+            name: 'Single',
+            description: 'Individual subscription plan',
+            price: 9.99,
+            currency: 'USD',
+            billingInterval: BillingInterval.monthly,
+            includedFeatures: [
+              PremiumFeature(
+                id: 'accounts',
+                name: '1 Premium account',
+                description: 'For one person',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'cancel_anytime',
+                name: 'Cancel anytime',
+                description: 'Cancel your subscription anytime',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'subscribe_or_one_time',
+                name: 'Subscribe or one-time payment',
+                description: 'Flexible payment options',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'ad_free',
+                name: 'Ad-free music listening',
                 description: 'Enjoy music without interruptions',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'offline',
+                name: 'Download songs for offline',
+                description: 'Download music for offline listening',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'hq_audio',
+                name: 'High quality audio',
+                description: 'Stream in high-quality up to 320kbps',
+                tier: FeatureTier.premium,
+              ),
+              PremiumFeature(
+                id: 'unlimited_skips',
+                name: 'Unlimited skips',
+                description: 'Skip as many songs as you want',
                 tier: FeatureTier.premium,
               ),
             ],
@@ -184,18 +291,29 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       final shouldCancel = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Cancel Subscription'),
+          backgroundColor: const Color(0xFF282828),
+          title: const Text(
+            'Cancel Subscription',
+            style: TextStyle(color: Colors.white),
+          ),
           content: const Text(
             'Are you sure you want to cancel your subscription? '
-            'You will continue to have access until the end of your billing period.'
+            'You will continue to have access until the end of your billing period.',
+            style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white70,
+              ),
               child: const Text('KEEP SUBSCRIPTION'),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.redAccent,
+              ),
               child: const Text('CANCEL SUBSCRIPTION'),
             ),
           ],
@@ -216,6 +334,7 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Your subscription has been cancelled'),
+            backgroundColor: Color(0xFF1DB954),
           ),
         );
       } else {
@@ -223,7 +342,10 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) {
@@ -237,7 +359,11 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1DB954)),
+        ),
+      );
     }
 
     return Column(
@@ -252,9 +378,11 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
   }
 
   Widget _buildCurrentSubscription() {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.all(0),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF282828),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -262,7 +390,11 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
           children: [
             Text(
               'Current Subscription',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             if (_currentStatus == SubscriptionStatus.premium && _currentPlan != null)
@@ -281,25 +413,46 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       children: [
         Text(
           '${_currentPlan!.name}',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           '${_currentPlan!.formattedPrice} ${_currentPlan!.billingIntervalText}',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: const TextStyle(
+            color: Color(0xFF1DB954),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: 12),
-        const Text('Included Features:'),
+        const Text(
+          'Included Features:',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         const SizedBox(height: 8),
         ..._currentPlan!.includedFeatures.map((feature) => Padding(
           padding: const EdgeInsets.only(bottom: 4),
           child: Row(
             children: [
-              const Icon(Icons.check, size: 16, color: Colors.green),
+              const Icon(Icons.check, size: 16, color: Color(0xFF1DB954)),
               const SizedBox(width: 8),
-              Expanded(child: Text(feature.name)),
+              Expanded(
+                child: Text(
+                  feature.name,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
             ],
           ),
         )),
@@ -309,7 +462,12 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
           child: ElevatedButton(
             onPressed: _isProcessing ? null : _cancelSubscription,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: _isProcessing
               ? const SizedBox(
@@ -320,7 +478,13 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-              : const Text('CANCEL SUBSCRIPTION'),
+              : const Text(
+                  'CANCEL SUBSCRIPTION',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
           ),
         ),
       ],
@@ -333,15 +497,32 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       children: [
         Text(
           'Free Plan',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
         SizedBox(height: 8),
-        Text('You are currently on the free plan with limited features.'),
+        Text(
+          'You are currently on the free plan with limited features.',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+        ),
         SizedBox(height: 12),
-        Text('Free Features:'),
+        Text(
+          'Free Features:',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         SizedBox(height: 8),
         _FeatureItem(text: 'Standard quality streaming'),
-        _FeatureItem(text: 'Limited skips'),
+        _FeatureItem(text: '10 free offline downloads.'),
         _FeatureItem(text: 'With ads'),
         SizedBox(height: 8),
       ],
@@ -349,26 +530,41 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
   }
 
   List<Widget> _buildAvailablePlans() {
+    // Show plans in a single row with 3 columns
     return [
       const Padding(
         padding: EdgeInsets.symmetric(vertical: 16.0),
         child: Text(
           'Available Premium Plans',
-          style:  TextStyle(
+          style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
       ),
-      ..._availablePlans.map((plan) => _buildPlanCard(plan)),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _availablePlans.map((plan) =>
+          Expanded(child: _buildPlanCard(plan))
+        ).toList(),
+      ),
     ];
   }
 
   Widget _buildPlanCard(PremiumPlan plan) {
-    return Card(
-      elevation: 2,
+    // Debug print to check included features
+    debugPrint('Plan: \'${plan.name}\' features: \'${plan.includedFeatures.map((f) => f.name).toList()}\'');
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF282828),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF404040),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -376,29 +572,59 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
           children: [
             Text(
               plan.name,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               '${plan.formattedPrice} ${plan.billingIntervalText}',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.secondary,
+              style: const TextStyle(
+                color: Color(0xFF1DB954),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
-            Text(plan.description),
+            Text(
+              plan.description,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
             const SizedBox(height: 12),
-            const Text('Included Features:'),
+            const Text(
+              'Included Features:',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 8),
-            ...plan.includedFeatures.map((feature) => Padding(
+            if (plan.includedFeatures.isEmpty)
+              const Text(
+                'No features listed.',
+                style: TextStyle(color: Colors.redAccent),
+              )
+            else ...plan.includedFeatures.map((feature) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.check, size: 16, color: Colors.green),
+                  const Icon(Icons.check, size: 16, color: Color(0xFF1DB954)),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(feature.name)),
+                  Expanded(
+                    child: Text(
+                      feature.name,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             )),
@@ -407,6 +633,14 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _isProcessing ? null : () => _subscribeToPlan(plan),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1DB954),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 child: _isProcessing
                   ? const SizedBox(
                       height: 20,
@@ -416,7 +650,13 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Text('SUBSCRIBE'),
+                  : const Text(
+                      'SUBSCRIBE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
               ),
             ),
           ],
@@ -437,9 +677,21 @@ class _FeatureItem extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          const Icon(Icons.check, size: 16),
+          const Icon(
+            Icons.check,
+            size: 16,
+            color: Color(0xFF1DB954),
+          ),
           const SizedBox(width: 8),
-          Expanded(child: Text(text)),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+          ),
         ],
       ),
     );

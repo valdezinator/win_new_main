@@ -88,7 +88,7 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -152,7 +152,7 @@ class _DynamicPlaylistsSectionState extends State<DynamicPlaylistsSection> {
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: DynamicPlaylistService.ALL_PLAYLIST_TYPES.length,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.zero,
                 itemBuilder: (context, index) {
                   final playlistType = DynamicPlaylistService.ALL_PLAYLIST_TYPES[index];
                   final typePlaylists = groupedPlaylists[playlistType] ?? [];

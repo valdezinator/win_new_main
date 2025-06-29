@@ -202,10 +202,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
+                      // IconButton(
+                      //   icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      //   onPressed: () => Navigator.of(context).pop(),
+                      // ),
                       const SizedBox(width: 16),
                       const Text(
                         'Settings',
@@ -291,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildAccountSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -374,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildPlaybackSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -462,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildNotificationsSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -516,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildAppearanceSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -547,7 +547,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildPrivacySection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -596,7 +596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildAboutSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
