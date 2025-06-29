@@ -1205,12 +1205,12 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         ),
         const SizedBox(width: 12),
         Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -1760,9 +1760,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           // Main Content Grid - 2 Column Layout for Desktop
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+              children: [
               // Left Column - Songs and Artists
-              Expanded(
+                Expanded(
                 flex: 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1789,7 +1789,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               const SizedBox(width: 32),
 
               // Right Column - Albums and Additional Content
-              Expanded(
+                Expanded(
                 flex: 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1805,10 +1805,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     // Quick Actions Section
                     _buildQuickActionsSection(),
                   ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -1844,11 +1844,11 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             // Left side - Image and basic info
             if (song != null) ...[
               _buildTopResultImage(song, 120),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
+                const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                      children: [
                     // Song Title
                     Text(
                       song['title'] ?? 'Unknown',
@@ -1892,10 +1892,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                           style: TextStyle(
                             color: Colors.grey[400],
                             fontSize: 14,
-                          ),
-                        ),
-                      ],
                     ),
+                  ),
+              ],
+            ),
                   ],
                 ),
               ),
@@ -1975,13 +1975,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ],
+            ),
           ],
+                ),
+            ),
+          ],
+        ],
         ),
       ),
     );
@@ -2095,26 +2095,26 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final songs = categorizedResults['Songs'] ?? [];
     final isHovered = _hoveredSongIndex == songs.indexOf(song);
 
-    return MouseRegion(
+      return MouseRegion(
       onEnter: (_) => setState(() => _hoveredSongIndex = songs.indexOf(song)),
       onExit: (_) => setState(() => _hoveredSongIndex = null),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => _playSearchResult(song),
-        child: Container(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => _playSearchResult(song),
+          child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
+            decoration: BoxDecoration(
             color: isCurrentlyPlaying
                 ? Colors.green.withOpacity(0.1)
                 : isHovered
                     ? Colors.white.withOpacity(0.05)
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
               // Album Art
-              ClipRRect(
+                ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: FutureBuilder<String>(
                   future: _backblazeService.getImageUrl(
@@ -2126,7 +2126,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       return Container(
                         width: 48,
                         height: 48,
-                        color: Colors.grey[850],
+                          color: Colors.grey[850],
                         child: const Icon(Icons.music_note, size: 24, color: Colors.white),
                       );
                     }
@@ -2155,13 +2155,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 16),
               
-              // Song Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      song['title'] ?? 'Unknown',
+                // Song Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song['title'] ?? 'Unknown',
                       style: TextStyle(
                         color: isCurrentlyPlaying ? Colors.green : Colors.white,
                         fontSize: 16,
@@ -2171,10 +2171,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      song['artist'] ?? 'Unknown Artist',
-                      style: TextStyle(
-                        color: Colors.grey[400],
+                      Text(
+                        song['artist'] ?? 'Unknown Artist',
+                        style: TextStyle(
+                          color: Colors.grey[400],
                         fontSize: 14,
                       ),
                       maxLines: 1,
@@ -2185,13 +2185,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               
               // Duration
-              Text(
-                _formatDuration(song['duration']),
-                style: TextStyle(
+                          Text(
+                            _formatDuration(song['duration']),
+                            style: TextStyle(
                   color: Colors.grey[500],
-                  fontSize: 14,
-                ),
-              ),
+                              fontSize: 14,
+                            ),
+                          ),
               
               const SizedBox(width: 16),
               
@@ -2231,17 +2231,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         size: 18,
                       ),
                       onPressed: () => _showSongContextMenu(song),
-                      padding: EdgeInsets.zero,
+                    padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       splashRadius: 18,
-                    ),
+                  ),
                   ],
                 ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildArtistsGrid(List<Map<String, dynamic>> artists) {
@@ -2260,57 +2260,57 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   Widget _buildDesktopArtistCard(Map<String, dynamic> artist) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
         onTap: () => _navigateToArtist(artist),
-        child: Container(
-          decoration: BoxDecoration(
+          child: Container(
+            decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.02),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withOpacity(0.05)),
-          ),
+            ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
-                backgroundColor: Colors.grey[850],
-                child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
-              ),
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundImage: artist['image_url'] != null ? NetworkImage(artist['image_url']) : null,
+                  backgroundColor: Colors.grey[850],
+                  child: artist['image_url'] == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+                ),
               const SizedBox(height: 16),
-              Text(
-                artist['name'] ?? 'Unknown Artist',
-                style: const TextStyle(
-                  color: Colors.white,
+                      Text(
+                        artist['name'] ?? 'Unknown Artist',
+                        style: const TextStyle(
+                          color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                ),
+                        ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Container(
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
+                        decoration: BoxDecoration(
                   color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.green.withOpacity(0.3)),
-                ),
-                child: const Text(
+                        ),
+                        child: const Text(
                   'FOLLOW',
-                  style: TextStyle(
+                          style: TextStyle(
                     color: Colors.green,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -2336,7 +2336,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       child: GestureDetector(
         onTap: () => _navigateToAlbum(album),
         child: Container(
-          decoration: BoxDecoration(
+                  decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.02),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withOpacity(0.05)),
@@ -2389,8 +2389,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     Text(
                       album['title'] ?? 'Unknown Album',
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
+                      color: Colors.white,
+                      fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
@@ -2432,9 +2432,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 12,
@@ -2443,27 +2443,397 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               _buildQuickActionChip(
                 icon: Icons.history,
                 label: 'Recently Played',
-                onTap: () {},
+                onTap: () => _showRecentlyPlayed(),
               ),
               _buildQuickActionChip(
                 icon: Icons.favorite,
                 label: 'Liked Songs',
-                onTap: () {},
+                onTap: () => _showLikedSongs(),
               ),
               _buildQuickActionChip(
                 icon: Icons.playlist_play,
                 label: 'Your Playlists',
-                onTap: () {},
+                onTap: () => _showUserPlaylists(),
               ),
               _buildQuickActionChip(
                 icon: Icons.trending_up,
                 label: 'Top Charts',
-                onTap: () {},
-              ),
-            ],
-          ),
+                onTap: () => _showTopCharts(),
+                ),
+              ],
+            ),
         ],
       ),
+    );
+  }
+
+  void _showRecentlyPlayed() {
+    if (recentlyPlayed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No recently played items'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _buildQuickActionDialog(
+        title: 'Recently Played',
+        icon: Icons.history,
+        items: recentlyPlayed.map((album) => {
+          'title': album['title'] ?? 'Unknown Album',
+          'subtitle': album['artist'] ?? 'Unknown Artist',
+          'image_url': album['image_url'],
+          'file_identifier': album['file_identifier'],
+          'type': 'album',
+          'data': album,
+        }).toList(),
+        onItemTap: (item) {
+          Navigator.pop(context);
+          _navigateToAlbum(item['data']);
+        },
+      ),
+    );
+  }
+
+  void _showLikedSongs() async {
+    final user = widget.supabaseClient.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to view liked songs'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Fetch liked songs from the database
+      final response = await widget.supabaseClient
+          .from('user_likes')
+          .select('''
+            song_id,
+            songs_2 (
+              id,
+              title,
+              artist,
+              album,
+              duration,
+              image_url,
+              file_identifier,
+              audio_url
+            )
+          ''')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      final likedSongs = response.map((like) => like['songs_2']).toList();
+
+      if (likedSongs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No liked songs found'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => _buildQuickActionDialog(
+          title: 'Liked Songs',
+          icon: Icons.favorite,
+          items: likedSongs.map((song) => {
+            'title': song['title'] ?? 'Unknown Song',
+            'subtitle': song['artist'] ?? 'Unknown Artist',
+            'image_url': song['image_url'],
+            'file_identifier': song['file_identifier'],
+            'type': 'song',
+            'data': song,
+          }).toList(),
+          onItemTap: (item) {
+            Navigator.pop(context);
+            _playSearchResult(item['data']);
+          },
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading liked songs: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showUserPlaylists() async {
+    final user = widget.supabaseClient.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to view your playlists'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final response = await widget.supabaseClient
+          .from('playlist')
+          .select('id, playlist_name, description, image_url, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+
+      final userPlaylists = List<Map<String, dynamic>>.from(response);
+
+      if (userPlaylists.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No playlists found. Create your first playlist!'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => _buildQuickActionDialog(
+          title: 'Your Playlists',
+          icon: Icons.playlist_play,
+          items: userPlaylists.map((playlist) => {
+            'title': playlist['playlist_name'] ?? 'Unnamed Playlist',
+            'subtitle': playlist['description'] ?? 'No description',
+            'image_url': playlist['image_url'],
+            'type': 'playlist',
+            'data': playlist,
+          }).toList(),
+          onItemTap: (item) {
+            Navigator.pop(context);
+            _navigateToPlaylist(item['data']);
+          },
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading playlists: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showTopCharts() {
+    if (topCharts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No top charts available'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _buildQuickActionDialog(
+        title: 'Top Charts',
+        icon: Icons.trending_up,
+        items: topCharts.asMap().entries.map((entry) {
+          final index = entry.key;
+          final album = entry.value;
+          return {
+            'title': '${index + 1}. ${album['title'] ?? 'Unknown Album'}',
+            'subtitle': album['artist'] ?? 'Unknown Artist',
+            'image_url': album['image_url'],
+            'file_identifier': album['file_identifier'],
+            'type': 'album',
+            'data': album,
+          };
+        }).toList(),
+        onItemTap: (item) {
+          Navigator.pop(context);
+          _navigateToAlbum(item['data']);
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuickActionDialog({
+    required String title,
+    required IconData icon,
+    required List<Map<String, dynamic>> items,
+    required Function(Map<String, dynamic>) onItemTap,
+  }) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 600,
+        height: 500,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(icon, color: Colors.green, size: 28),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Items List
+            Expanded(
+              child: ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+                      onTap: () => onItemTap(item),
+          child: Container(
+                        padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                            // Image
+                ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: FutureBuilder<String>(
+                                future: _backblazeService.getImageUrl(
+                                  item['image_url'],
+                                  item['file_identifier'],
+                                ),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return Container(
+                                      width: 48,
+                                      height: 48,
+                          color: Colors.grey[850],
+                                      child: Icon(
+                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
+                                        size: 24,
+                                        color: Colors.white,
+                                      ),
+                                    );
+                                  }
+                                  if (snapshot.hasError || !snapshot.hasData) {
+                                    return Container(
+                                      width: 48,
+                                      height: 48,
+                                      color: Colors.grey[850],
+                                      child: Icon(
+                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
+                                        size: 24,
+                                        color: Colors.white,
+                                      ),
+                                    );
+                                  }
+                                  return Image.network(
+                                    snapshot.data!,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 48,
+                                      height: 48,
+                                      color: Colors.grey[850],
+                                      child: Icon(
+                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
+                                        size: 24,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            
+                            // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                                    item['title'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                        ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                      ),
+                                  const SizedBox(height: 4),
+                      Text(
+                                    item['subtitle'],
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            // Action Icon
+                            Icon(
+                              item['type'] == 'song' ? Icons.play_arrow : Icons.arrow_forward_ios,
+                              color: Colors.grey[400],
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
     );
   }
 
@@ -2488,7 +2858,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             children: [
               Icon(
                 icon,
-                color: Colors.green,
+                    color: Colors.green,
                 size: 18,
               ),
               const SizedBox(width: 8),
@@ -2498,14 +2868,14 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   void _showSongContextMenu(Map<String, dynamic> song) async {
     final RenderBox box = context.findRenderObject() as RenderBox;
