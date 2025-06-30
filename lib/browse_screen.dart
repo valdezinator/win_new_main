@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'services/backblaze_service.dart';
 import 'services/analytics_service.dart';
 import 'layouts/content_view.dart'; // Import ContentViewController
+import 'dart:ui'; // For BackdropFilter
 
 class BrowseScreen extends StatefulWidget {
   final SupabaseClient supabaseClient;
@@ -640,6 +641,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final isHovered = index != null && _hoveredSongIndex == index;
     final isKeyboardSelected = index != null && _keyboardSelectedIndex == index;
 
+    // Define the key here!
+    final GlobalKey moreButtonKey = GlobalKey();
+
     return MouseRegion(
       onEnter: (_) {
         if (index != null) {
@@ -654,22 +658,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onSecondaryTapDown: (details) async {
-          final selected = await showMenu<String>(
-            context: context,
-            position: RelativeRect.fromLTRB(
-              details.globalPosition.dx,
-              details.globalPosition.dy,
-              details.globalPosition.dx + 1,
-              details.globalPosition.dy + 1,
-            ),
-            items: [
-              const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
-              const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
-              const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
-              const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
-              const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
-            ],
-          );
+          final selected = await _showCustomSongContextMenu(context, details.globalPosition, song);
           if (selected == 'play') {
             _playSearchResult(song);
           } else if (selected == 'add_to_queue') {
@@ -811,30 +800,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 if (isHovered) ...[
                   const SizedBox(width: 16),
                   IconButton(
+                    key: moreButtonKey, // <-- use the key here
                     icon: Icon(
                       Icons.more_horiz,
                       color: Colors.grey[400],
                       size: compact ? 16 : 20,
                     ),
                     onPressed: () async {
-                      final RenderBox box = context.findRenderObject() as RenderBox;
-                      final Offset position = box.localToGlobal(Offset.zero);
-                      final selected = await showMenu<String>(
-                        context: context,
-                        position: RelativeRect.fromLTRB(
-                          position.dx + 40,
-                          position.dy + 40,
-                          position.dx + 41,
-                          position.dy + 41,
-                        ),
-                        items: [
-                          const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
-                          const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
-                          const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
-                          const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
-                          const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
-                        ],
-                      );
+                      final RenderBox button = moreButtonKey.currentContext!.findRenderObject() as RenderBox;
+                      final Offset buttonPosition = button.localToGlobal(Offset.zero);
+                      final Size buttonSize = button.size;
+                      final Offset menuPosition = Offset(buttonPosition.dx, buttonPosition.dy + buttonSize.height);
+                      final selected = await _showCustomSongContextMenu(context, menuPosition, song);
                       if (selected == 'play') {
                         _playSearchResult(song);
                       } else if (selected == 'add_to_queue') {
@@ -2110,26 +2087,43 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     final songs = categorizedResults['Songs'] ?? [];
     final isHovered = _hoveredSongIndex == songs.indexOf(song);
 
-      return MouseRegion(
+    // Define the key here!
+    final GlobalKey moreButtonKey = GlobalKey();
+
+    return MouseRegion(
       onEnter: (_) => setState(() => _hoveredSongIndex = songs.indexOf(song)),
       onExit: (_) => setState(() => _hoveredSongIndex = null),
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => _playSearchResult(song),
-          child: Container(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _playSearchResult(song),
+        onSecondaryTapDown: (details) async {
+          final selected = await _showCustomSongContextMenu(context, details.globalPosition, song);
+          if (selected == 'play') {
+            _playSearchResult(song);
+          } else if (selected == 'add_to_queue') {
+            _addToQueue(song);
+          } else if (selected == 'add_to_playlist') {
+            _showAddToPlaylistDialog(song);
+          } else if (selected == 'view_album') {
+            _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
+          } else if (selected == 'view_artist') {
+            _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
+          }
+        },
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
+          decoration: BoxDecoration(
             color: isCurrentlyPlaying
                 ? Colors.green.withOpacity(0.1)
                 : isHovered
                     ? Colors.white.withOpacity(0.05)
                     : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
               // Album Art
-                ClipRRect(
+              ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: FutureBuilder<String>(
                   future: _backblazeService.getImageUrl(
@@ -2141,7 +2135,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       return Container(
                         width: 48,
                         height: 48,
-                          color: Colors.grey[850],
+                        color: Colors.grey[850],
                         child: const Icon(Icons.music_note, size: 24, color: Colors.white),
                       );
                     }
@@ -2169,14 +2163,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 ),
               ),
               const SizedBox(width: 16),
-              
-                // Song Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        song['title'] ?? 'Unknown',
+              // Song Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      song['title'] ?? 'Unknown',
                       style: TextStyle(
                         color: isCurrentlyPlaying ? Colors.green : Colors.white,
                         fontSize: 16,
@@ -2186,10 +2179,10 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                      Text(
-                        song['artist'] ?? 'Unknown Artist',
-                        style: TextStyle(
-                          color: Colors.grey[400],
+                    Text(
+                      song['artist'] ?? 'Unknown Artist',
+                      style: TextStyle(
+                        color: Colors.grey[400],
                         fontSize: 14,
                       ),
                       maxLines: 1,
@@ -2198,18 +2191,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   ],
                 ),
               ),
-              
               // Duration
-                          Text(
-                            _formatDuration(song['duration']),
-                            style: TextStyle(
+              Text(
+                _formatDuration(song['duration']),
+                style: TextStyle(
                   color: Colors.grey[500],
-                              fontSize: 14,
-                            ),
-                          ),
-              
+                  fontSize: 14,
+                ),
+              ),
               const SizedBox(width: 16),
-              
               // Actions
               if (isHovered || isCurrentlyPlaying)
                 Row(
@@ -2240,23 +2230,41 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                     const SizedBox(width: 8),
                     IconButton(
+                      key: moreButtonKey, // <-- use the key here
                       icon: Icon(
                         Icons.more_horiz,
                         color: Colors.grey[400],
                         size: 18,
                       ),
-                      onPressed: () => _showSongContextMenu(song),
-                    padding: EdgeInsets.zero,
+                      onPressed: () async {
+                        final RenderBox button = moreButtonKey.currentContext!.findRenderObject() as RenderBox;
+                        final Offset buttonPosition = button.localToGlobal(Offset.zero);
+                        final Size buttonSize = button.size;
+                        final Offset menuPosition = Offset(buttonPosition.dx, buttonPosition.dy + buttonSize.height);
+                        final selected = await _showCustomSongContextMenu(context, menuPosition, song);
+                        if (selected == 'play') {
+                          _playSearchResult(song);
+                        } else if (selected == 'add_to_queue') {
+                          _addToQueue(song);
+                        } else if (selected == 'add_to_playlist') {
+                          _showAddToPlaylistDialog(song);
+                        } else if (selected == 'view_album') {
+                          _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
+                        } else if (selected == 'view_artist') {
+                          _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
+                        }
+                      },
+                      padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       splashRadius: 18,
-                  ),
+                    ),
                   ],
                 ),
-              ],
-            ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildArtistsGrid(List<Map<String, dynamic>> artists) {
@@ -3052,38 +3060,68 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     );
   }
 
-  void _showSongContextMenu(Map<String, dynamic> song) async {
-    final RenderBox box = context.findRenderObject() as RenderBox;
-    final Offset position = box.localToGlobal(Offset.zero);
-    
-    final selected = await showMenu<String>(
+  Future<String?> _showCustomSongContextMenu(BuildContext context, Offset position, Map<String, dynamic> song) async {
+    return showDialog<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx + 40,
-        position.dy + 40,
-        position.dx + 41,
-        position.dy + 41,
-      ),
-      items: [
-        const PopupMenuItem<String>(value: 'play', child: Text('Play Now')),
-        const PopupMenuItem<String>(value: 'add_to_queue', child: Text('Add to Queue')),
-        const PopupMenuItem<String>(value: 'add_to_playlist', child: Text('Add to Playlist')),
-        const PopupMenuItem<String>(value: 'view_album', child: Text('View Album')),
-        const PopupMenuItem<String>(value: 'view_artist', child: Text('View Artist')),
-      ],
+      barrierColor: Colors.transparent,
+      barrierDismissible: true,
+      builder: (context) {
+        return Stack(
+          children: [
+            Positioned(
+              left: position.dx,
+              top: position.dy,
+              child: Material(
+                color: Colors.transparent,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      width: 240,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildCustomMenuItem(context, Icons.play_arrow, 'Play Now', 'play'),
+                          _buildCustomMenuItem(context, Icons.queue_music, 'Add to Queue', 'add_to_queue'),
+                          _buildCustomMenuItem(context, Icons.playlist_add, 'Add to Playlist', 'add_to_playlist'),
+                          _buildCustomMenuItem(context, Icons.album, 'View Album', 'view_album'),
+                          _buildCustomMenuItem(context, Icons.person, 'View Artist', 'view_artist'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
-    
-    if (selected == 'play') {
-      _playSearchResult(song);
-    } else if (selected == 'add_to_queue') {
-      _addToQueue(song);
-    } else if (selected == 'add_to_playlist') {
-      _showAddToPlaylistDialog(song);
-    } else if (selected == 'view_album') {
-      _navigateToAlbum({'id': song['album_id'], 'title': song['album'] ?? 'Album'});
-    } else if (selected == 'view_artist') {
-      _navigateToArtist({'id': song['artist_id'], 'name': song['artist'] ?? 'Artist'});
-    }
+  }
+
+  Widget _buildCustomMenuItem(BuildContext context, IconData icon, String text, String value) {
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white70, size: 20),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _addToQueue(Map<String, dynamic> song) {

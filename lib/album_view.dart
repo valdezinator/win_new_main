@@ -49,6 +49,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   Map<String, dynamic>? _currentSong; // NEW state variable
   bool _isFavorited = false; // Add favorites state
   bool _isFavoritesLoading = false; // Add loading state for favorites
+  Map<String, bool> _downloadedSongs = {}; // Track individual song download status
 
   Timer? _downloadProgressTimer;
 
@@ -60,6 +61,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
   final FavoritesService _favoritesService = FavoritesService(); // Add FavoritesService instance
 
   final Map<String, Map<String, dynamic>> _songCache = {};
+  final Map<String, String> _imageUrlCache = {}; // Cache for resolved image URLs
 
   @override
   void initState() {
@@ -93,6 +95,7 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           }
           _checkDownloadState();
           _checkFavoriteState(); // Add favorites checking
+          _checkIndividualSongDownloadStatus(); // Check individual song download status
         });
       }
     });
@@ -104,6 +107,15 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           _downloadProgress = progress;
           if (progress.containsKey('Total')) {
             _totalDownloadProgress = progress['Total'] ?? 0.0;
+          }
+          
+          // Update individual song download status when songs complete
+          for (var song in songs) {
+            final songId = song['id'].toString();
+            final songTitle = song['title'];
+            if (progress.containsKey(songTitle) && progress[songTitle] == 1.0) {
+              _downloadedSongs[songId] = true;
+            }
           }
         });
       }
@@ -148,61 +160,38 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
     }
   }
 
-  Future<void> _addToFavorites() async {
-    if (_isFavoritesLoading) return;
+  Future<void> _checkIndividualSongDownloadStatus() async {
+    final Map<String, bool> downloadedSongs = {};
+    
+    for (var song in songs) {
+      final songId = song['id'].toString();
+      final isDownloaded = await _downloadService.isSongDownloaded(songId);
+      downloadedSongs[songId] = isDownloaded;
+    }
+    
+    if (mounted) {
+      setState(() {
+        _downloadedSongs = downloadedSongs;
+      });
+    }
+  }
 
-    setState(() {
-      _isFavoritesLoading = true;
-    });
-
+  Future<String> _getCachedImageUrl(String? imageUrl, String? imageIdentifier) async {
+    if (imageUrl == null) return '';
+    
+    final cacheKey = '${imageUrl}_${imageIdentifier ?? ''}';
+    
+    if (_imageUrlCache.containsKey(cacheKey)) {
+      return _imageUrlCache[cacheKey]!;
+    }
+    
     try {
-      final newFavoriteState = await _favoritesService.toggleAlbumFavorite(widget.album['id'].toString());
-      
-      if (mounted) {
-        setState(() {
-          _isFavorited = newFavoriteState;
-          _isFavoritesLoading = false;
-        });
-
-        // Show feedback to user
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  newFavoriteState ? Icons.favorite : Icons.favorite_border,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  newFavoriteState 
-                    ? 'Added to Favorites' 
-                    : 'Removed from Favorites',
-                ),
-              ],
-            ),
-            backgroundColor: newFavoriteState ? Colors.green : Colors.grey[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
+      final resolvedUrl = await _backblazeService.getImageUrl(imageUrl, imageIdentifier);
+      _imageUrlCache[cacheKey] = resolvedUrl;
+      return resolvedUrl;
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isFavoritesLoading = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating favorites: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      print('Error resolving image URL: $e');
+      return imageUrl; // Fallback to original URL
     }
   }
 
@@ -437,6 +426,11 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             );
           }
         });
+      }
+
+      // Pre-load all image URLs to prevent reloading on scroll
+      for (var song in validSongs) {
+        _getCachedImageUrl(song['image_url'], song['image_identifier']);
       }
 
       for (var song in validSongs) {
@@ -752,7 +746,8 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
             borderRadius: BorderRadius.circular(12),
             child: widget.album['image_url'] != null
                 ? FutureBuilder<String>(
-                    future: _backblazeService.getImageUrl(
+                    key: ValueKey('album_cover_${widget.album['id']}'),
+                    future: _getCachedImageUrl(
                       widget.album['image_url'],
                       widget.album['image_identifier'],
                     ),
@@ -1183,69 +1178,46 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        entry.value['image_url'],
-                        entry.value['image_identifier'],
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      child: FutureBuilder<String>(
+                        key: ValueKey('song_image_${entry.value['id']}'),
+                        future: _getCachedImageUrl(
+                          entry.value['image_url'],
+                          entry.value['image_identifier'],
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Container(
+                              color: Colors.grey[850],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            );
+                          }
+
+                          if (snapshot.hasError || snapshot.data == null || snapshot.data!.isEmpty) {
+                            return Container(
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                            );
+                          }
+
+                          return CachedNetworkImage(
+                            imageUrl: snapshot.data!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[850],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                            ),
+                          );
+                        },
                       ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
-                            width: 40,
-                            height: 40,
-                            color: Colors.grey[850],
-                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Container(
-                            width: 40,
-                            height: 40,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.error_outline, color: Colors.white54, size: 20),
-                          );
-                        }
-
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            width: 40,
-                            height: 40,
-                            color: Colors.grey[850],
-                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            width: 40,
-                            height: 40,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
-                          ),
-                        );
-                      },
                     ),
                   ),
-                  // Show download indicator in the corner if downloaded
-                  if (_isDownloaded)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.download_done,
-                          color: Colors.green,
-                          size: 12,
-                        ),
-                      ),
-                    ),
                   // Show "Not Available" indicator for non-playable songs
                   if (!isPlayable)
                     Positioned(
@@ -1283,14 +1255,36 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      entry.value['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
-                      style: TextStyle(
-                        color: isPlayable ? Colors.white70 : Colors.grey[500],
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.value['artist'] ?? widget.album['artist'] ?? 'Unknown Artist',
+                            style: TextStyle(
+                              color: isPlayable ? Colors.white70 : Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Individual song download indicator
+                        if (_downloadedSongs[entry.value['id'].toString()] == true)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.download_done,
+                              color: Colors.white,
+                              size: 10,
+                            ),
+                          ),
+                      ],
                     ),
                     // Show "Audio not available" message for non-playable songs
                     if (!isPlayable)
@@ -1469,6 +1463,9 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         _totalDownloadProgress = 1.0;
       });
 
+      // Refresh individual song download status
+      await _checkIndividualSongDownloadStatus();
+
       // Check if widget is still mounted before showing SnackBar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1541,6 +1538,11 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
 
       setState(() {
         _totalDownloadProgress = 1.0;
+      });
+
+      // Update individual song download status
+      setState(() {
+        _downloadedSongs[song['id'].toString()] = true;
       });
 
       // Show success message
@@ -1637,6 +1639,64 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         tooltip: _isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
       ),
     );
+  }
+
+  Future<void> _addToFavorites() async {
+    if (_isFavoritesLoading) return;
+
+    setState(() {
+      _isFavoritesLoading = true;
+    });
+
+    try {
+      final newFavoriteState = await _favoritesService.toggleAlbumFavorite(widget.album['id'].toString());
+      
+      if (mounted) {
+        setState(() {
+          _isFavorited = newFavoriteState;
+          _isFavoritesLoading = false;
+        });
+
+        // Show feedback to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  newFavoriteState ? Icons.favorite : Icons.favorite_border,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  newFavoriteState 
+                    ? 'Added to Favorites' 
+                    : 'Removed from Favorites',
+                ),
+              ],
+            ),
+            backgroundColor: newFavoriteState ? Colors.green : Colors.grey[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFavoritesLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating favorites: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override

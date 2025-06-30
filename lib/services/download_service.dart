@@ -60,15 +60,13 @@ class DownloadService {
         updateTotalProgress();
       }
 
-      // Download songs in parallel with a maximum of 3 concurrent downloads
-      final songDownloads = <Future<void>>[];
-
+      // Download songs sequentially to prevent app freezing
       for (var song in songs) {
         if (song['audio_url'] != null) {
           final filename = 'song_${song['id']}';
           final songTitle = song['title'];
 
-          final downloadFuture = _downloadFile(
+          await _downloadFile(
             song['audio_url'],
             filename,
             songTitle,
@@ -76,18 +74,16 @@ class DownloadService {
               progressMap[songTitle] = progress;
               updateTotalProgress();
             }
-          ).then((_) {
-            completedItems++;
-            progressMap[songTitle] = 1.0;
-            updateTotalProgress();
-          });
-
-          songDownloads.add(downloadFuture);
+          );
+          
+          completedItems++;
+          progressMap[songTitle] = 1.0;
+          updateTotalProgress();
+          
+          // Add a small delay between downloads to prevent overwhelming the system
+          await Future.delayed(const Duration(milliseconds: 100));
         }
       }
-
-      // Wait for all downloads to complete
-      await Future.wait(songDownloads);
 
       // Calculate total size of downloaded files
       int totalSize = 0;
