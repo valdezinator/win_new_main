@@ -132,8 +132,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           .select()
           .order('created_at');
 
+      final albumsList = List<Map<String, dynamic>>.from(response);
+      // Pre-resolve all album image URLs
+      for (var album in albumsList) {
+        try {
+          album['resolved_image_url'] = await _backblazeService.getImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
-        albums = List<Map<String, dynamic>>.from(response);
+        albums = albumsList;
         // Cache all songs in albums if available
         for (var album in albums) {
           if (album['songs'] != null) {
@@ -443,12 +456,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: album['image_url'] != null
+                    child: album['resolved_image_url'] != null && album['resolved_image_url'].isNotEmpty
                         ? Image.network(
-                            album['image_url'],
+                            album['resolved_image_url'],
                             width: 160,
                             height: 160,
                             fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 160,
+                              height: 160,
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, size: 60, color: Colors.white),
+                            ),
                           )
                         : Container(
                             width: 160,
@@ -1242,42 +1261,25 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        album['image_url'],
-                        album['file_identifier'],
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
+                    child: album['resolved_image_url'] != null && album['resolved_image_url'].isNotEmpty
+                        ? Image.network(
+                            album['resolved_image_url'],
                             width: 160,
-                            height: 180,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, size: 60, color: Colors.white),
-                          );
-                        }
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return Container(
+                            height: 160,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 160,
+                              height: 160,
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, size: 60, color: Colors.white),
+                            ),
+                          )
+                        : Container(
                             width: 160,
-                            height: 180,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, size: 60, color: Colors.white),
-                          );
-                        }
-                        return Image.network(
-                          snapshot.data!,
-                          width: 160,
-                          height: 180,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 160,
-                            height: 180,
+                            height: 160,
                             color: Colors.grey[850],
                             child: const Icon(Icons.album, size: 60, color: Colors.white),
                           ),
-                        );
-                      },
-                    ),
                   ),
                   Positioned.fill(
                     child: Material(
@@ -1357,42 +1359,25 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                   // Album Cover
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        album['image_url'],
-                        album['file_identifier'],
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
+                    child: album['resolved_image_url'] != null && album['resolved_image_url'].isNotEmpty
+                        ? Image.network(
+                            album['resolved_image_url'],
                             width: 48,
                             height: 48,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, size: 24, color: Colors.white),
-                          );
-                        }
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return Container(
-                            width: 48,
-                            height: 48,
-                            color: Colors.grey[850],
-                            child: const Icon(Icons.album, size: 24, color: Colors.white),
-                          );
-                        }
-                        return Image.network(
-                          snapshot.data!,
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 48,
+                              height: 48,
+                              color: Colors.grey[850],
+                              child: const Icon(Icons.album, size: 24, color: Colors.white),
+                            ),
+                          )
+                        : Container(
                             width: 48,
                             height: 48,
                             color: Colors.grey[850],
                             child: const Icon(Icons.album, size: 24, color: Colors.white),
                           ),
-                        );
-                      },
-                    ),
                   ),
                   const SizedBox(width: 12),
                   // Album Info
@@ -2371,35 +2356,20 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               Expanded(
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  child: FutureBuilder<String>(
-                    future: _backblazeService.getImageUrl(
-                      album['image_url'],
-                      album['file_identifier'],
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Container(
-                          color: Colors.grey[850],
-                          child: const Icon(Icons.album, size: 60, color: Colors.white),
-                        );
-                      }
-                      if (snapshot.hasError || !snapshot.hasData) {
-                        return Container(
-                          color: Colors.grey[850],
-                          child: const Icon(Icons.album, size: 60, color: Colors.white),
-                        );
-                      }
-                      return Image.network(
-                        snapshot.data!,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                  child: album['resolved_image_url'] != null && album['resolved_image_url'].isNotEmpty
+                      ? Image.network(
+                          album['resolved_image_url'],
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[850],
+                            child: const Icon(Icons.album, size: 60, color: Colors.white),
+                          ),
+                        )
+                      : Container(
                           color: Colors.grey[850],
                           child: const Icon(Icons.album, size: 60, color: Colors.white),
                         ),
-                      );
-                    },
-                  ),
                 ),
               ),
               

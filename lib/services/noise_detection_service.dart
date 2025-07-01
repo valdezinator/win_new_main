@@ -140,7 +140,7 @@ class NoiseDetectionService with ChangeNotifier {
     
     // Reset audio settings back to default
     _audioService.resetVolume();
-    _audioService.setCrossfadeDuration(null);
+    // Crossfade adjustment is not supported in the current AudioService version.
   }
   
   /// Check current noise level and adjust audio settings
@@ -154,13 +154,13 @@ class NoiseDetectionService with ChangeNotifier {
       // Map noise levels to audio adjustments
       if (noiseLevel > 70) { // High noise (70 dB is roughly a busy street)
         _audioService.adjustVolume(0.15); // Increase by 15%
-        _audioService.setCrossfadeDuration(2000); // 2 second crossfade
+        // Crossfade adjustment is not supported in the current AudioService version.
       } else if (noiseLevel > 50) { // Medium noise (conversation level)
         _audioService.adjustVolume(0.08); // Increase by 8%
-        _audioService.setCrossfadeDuration(1500); // 1.5 second crossfade
+        // Crossfade adjustment is not supported in the current AudioService version.
       } else { // Low noise
         _audioService.resetVolume();
-        _audioService.setCrossfadeDuration(1000); // Standard crossfade
+        // Crossfade adjustment is not supported in the current AudioService version.
       }
     } catch (e) {
       print('Error checking noise level: $e');

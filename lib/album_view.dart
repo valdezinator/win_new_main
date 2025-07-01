@@ -253,6 +253,11 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         if (albumMetadata != null && albumMetadata['songs'] != null) {
           final downloadedSongs = List<Map<String, dynamic>>.from(albumMetadata['songs']);
 
+          // Pre-resolve images for offline songs (use local path or fallback)
+          for (var song in downloadedSongs) {
+            song['resolved_image_url'] = song['image_url'] ?? '';
+          }
+
           if (mounted) {
             setState(() {
               songs = downloadedSongs;
@@ -415,6 +420,18 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           .cast<Map<String, dynamic>>()
           .toList();
 
+      // Pre-resolve all image URLs and add as resolved_image_url
+      for (var song in validSongs) {
+        try {
+          song['resolved_image_url'] = await _backblazeService.getImageUrl(
+            song['image_url'],
+            song['image_identifier'],
+          );
+        } catch (e) {
+          song['resolved_image_url'] = song['image_url'] ?? '';
+        }
+      }
+
       if (mounted) {
         setState(() {
           songs = validSongs;
@@ -428,9 +445,16 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
         });
       }
 
-      // Pre-load all image URLs to prevent reloading on scroll
-      for (var song in validSongs) {
-        _getCachedImageUrl(song['image_url'], song['image_identifier']);
+      // Pre-resolve album cover image URL and store in album map
+      if (widget.album['image_url'] != null) {
+        try {
+          widget.album['resolved_image_url'] = await _backblazeService.getImageUrl(
+            widget.album['image_url'],
+            widget.album['image_identifier'],
+          );
+        } catch (e) {
+          widget.album['resolved_image_url'] = widget.album['image_url'] ?? '';
+        }
       }
 
       for (var song in validSongs) {
@@ -744,67 +768,31 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: widget.album['image_url'] != null
-                ? FutureBuilder<String>(
-                    key: ValueKey('album_cover_${widget.album['id']}'),
-                    future: _getCachedImageUrl(
-                      widget.album['image_url'],
-                      widget.album['image_identifier'],
+            child: widget.album['resolved_image_url'] != null && widget.album['resolved_image_url'].isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: widget.album['resolved_image_url'],
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[900],
+                      child: const Center(child: CircularProgressIndicator()),
                     ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Container(
-                          color: Colors.grey[900],
-                          child: const Center(child: CircularProgressIndicator()),
-                        );
-                      }
-
-                      if (snapshot.hasError) {
-                        return Container(
-                          color: Colors.grey[800],
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline, color: Colors.white54, size: 48),
-                              SizedBox(height: 8),
-                              Text(
-                                'Error loading image',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[800],
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.album, color: Colors.white, size: 50),
+                          SizedBox(height: 8),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
                           ),
-                        );
-                      }
-
-                      return CachedNetworkImage(
-                        imageUrl: snapshot.data!,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[900],
-                          child: const Center(child: CircularProgressIndicator()),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[800],
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.album, color: Colors.white, size: 50),
-                              SizedBox(height: 8),
-                              Text(
-                                'Image not available',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                        ],
+                      ),
+                    ),
                   )
                 : Container(
                     color: Colors.grey[800],
@@ -1181,41 +1169,23 @@ class _AlbumViewState extends State<AlbumView> with SingleTickerProviderStateMix
                     child: Container(
                       width: 40,
                       height: 40,
-                      child: FutureBuilder<String>(
-                        key: ValueKey('song_image_${entry.value['id']}'),
-                        future: _getCachedImageUrl(
-                          entry.value['image_url'],
-                          entry.value['image_identifier'],
-                        ),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return Container(
-                              color: Colors.grey[850],
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            );
-                          }
-
-                          if (snapshot.hasError || snapshot.data == null || snapshot.data!.isEmpty) {
-                            return Container(
-                              color: Colors.grey[850],
-                              child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
-                            );
-                          }
-
-                          return CachedNetworkImage(
-                            imageUrl: snapshot.data!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[850],
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            ),
-                            errorWidget: (context, url, error) => Container(
+                      child: entry.value['resolved_image_url'] != null && entry.value['resolved_image_url'].isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: entry.value['resolved_image_url'],
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[850],
+                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[850],
+                                child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                              ),
+                            )
+                          : Container(
                               color: Colors.grey[850],
                               child: const Icon(Icons.music_note, color: Colors.white54, size: 20),
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ),
                   // Show "Not Available" indicator for non-playable songs

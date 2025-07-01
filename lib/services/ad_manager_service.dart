@@ -11,7 +11,7 @@ class AdManagerService {
   factory AdManagerService() => _instance;
   AdManagerService._internal();
 
-  static const int AD_INTERVAL_MINUTES = 1;
+  static const int AD_INTERVAL_MINUTES = 10; // Spotify-like interval
   static const int SKIP_DELAY_SECONDS = 5;
   
   Timer? _adTimer;
@@ -30,11 +30,18 @@ class AdManagerService {
   StreamSubscription? _adEligibilitySubscription;
   bool _isAdEligible = false;
 
+  // Spotify-like ad logic fields
+  Duration _activeListeningTime = Duration.zero;
+  DateTime? _lastPlaybackStart;
+  bool _adDue = false;
+
   // Ad state
   bool get isAdPlaying => _isAdPlaying;
   bool get canSkip => _canSkip;
   bool get isAdEligible => _isAdEligible;
   
+  bool _wasPlayingBeforeAd = false; // Track if song was playing before ad
+
   // Initialize the service with the main audio player
   Future<void> initialize(AudioPlayer mainPlayer) async {
     _mainAudioPlayer = mainPlayer;
@@ -98,6 +105,8 @@ class AdManagerService {
 
     // Store current song info and pause main player
     _playbackPositionBeforeAd = _mainAudioPlayer!.position;
+    // Track if the song was playing before the ad
+    _wasPlayingBeforeAd = _mainAudioPlayer!.playing;
     // Store the current audio source to resume the original song after the ad.
     // We need a way to get the original AudioSource back. Storing the URI and tag might work.
     // Note: This assumes the original song was loaded via setUrl or setAudioSource with a tag.
@@ -170,7 +179,9 @@ class AdManagerService {
        if (_currentSongUri != null) {
           try {
             _mainAudioPlayer!.setUrl(_currentSongUri.toString(), initialPosition: _playbackPositionBeforeAd, tag: _currentSongTag); // Reload with original position and tag
-            _mainAudioPlayer!.play();
+            if (_wasPlayingBeforeAd) {
+              _mainAudioPlayer!.play();
+            }
           } catch (e) {
              print('Error resuming original song: $e');
              // Handle error resuming - maybe just start the timer and leave player stopped
@@ -182,6 +193,7 @@ class AdManagerService {
        _playbackPositionBeforeAd = null; // Clear stored position
        _currentSongUri = null; // Clear stored URI
        _currentSongTag = null; // Clear stored tag
+       _wasPlayingBeforeAd = false; // Reset
     }
     
     // Restart the ad timer for the next interval (only if still eligible)
@@ -257,5 +269,41 @@ class AdManagerService {
       _mainAudioPlayer!.stop();
       _onAdComplete();
     }
+  }
+
+  // Call this from AudioService when playback starts
+  void onPlaybackStarted() {
+    _lastPlaybackStart = DateTime.now();
+  }
+
+  // Call this from AudioService when playback pauses/stops
+  void onPlaybackPaused() {
+    if (_lastPlaybackStart != null) {
+      final now = DateTime.now();
+      _activeListeningTime += now.difference(_lastPlaybackStart!);
+      _lastPlaybackStart = null;
+      if (_activeListeningTime.inMinutes >= AD_INTERVAL_MINUTES) {
+        _adDue = true;
+      }
+    }
+  }
+
+  // Call this from AudioService when a song finishes
+  void onSongFinished() {
+    onPlaybackPaused(); // Add any remaining time
+  }
+
+  // Should be called before playing a new song
+  bool shouldPlayAdBeforeNextSong() {
+    if (_adDue && !_isAdPlaying) {
+      return true;
+    }
+    return false;
+  }
+
+  // Call this after ad is played
+  void resetAdDue() {
+    _adDue = false;
+    _activeListeningTime = Duration.zero;
   }
 } 

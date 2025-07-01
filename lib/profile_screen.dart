@@ -11,6 +11,7 @@ import 'services/route_tracking_service.dart';
 import 'services/payment_service.dart';
 import 'services/auth_service.dart';
 import 'widgets/subscription_manager.dart';
+import 'services/audio_service.dart';
 
 /// SettingsScreen: Comprehensive settings page for the music app
 /// Redesigned to match Spotify Desktop layout with sidebar navigation
@@ -61,6 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     {'title': 'Privacy', 'icon': Icons.security_outlined},
     {'title': 'About', 'icon': Icons.info_outline},
   ];
+
+  final AudioService _audioService = AudioService();
 
   @override
   void initState() {
@@ -127,6 +130,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _noiseAdaptiveCrossfade = prefs.getBool('noise_adaptive_crossfade') ?? false;
       _offlineRouteCache = prefs.getBool('offline_route_cache') ?? false;
     });
+    // Apply settings to AudioService
+    _audioService.setGaplessPlayback(_gapless);
   }
 
   Future<void> _saveSetting(String key, dynamic value) async {
@@ -391,12 +396,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _buildSwitchTile(
                   'Crossfade',
-                  'Smoothly transition between songs',
+                  'Smoothly transition between songs (Coming Soon)',
                   _crossfade,
-                  (value) {
-                    setState(() => _crossfade = value);
-                    _saveSetting('crossfade', value);
-                  },
+                  null,
+                  disabled: true,
                 ),
                 _buildDivider(),
                 _buildSwitchTile(
@@ -406,6 +409,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   (value) {
                     setState(() => _gapless = value);
                     _saveSetting('gapless', value);
+                    _audioService.setGaplessPlayback(value);
                   },
                 ),
                 _buildDivider(),
@@ -642,7 +646,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool>? onChanged, {bool disabled = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -672,7 +676,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Switch(
             value: value,
-            onChanged: onChanged,
+            onChanged: disabled ? null : onChanged,
             activeColor: const Color(0xFF1DB954),
           ),
         ],

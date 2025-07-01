@@ -42,6 +42,9 @@ class AudioService {
   double _baseVolume = 0.7;
   int? _baseCrossfadeDuration;
   bool _adaptiveVolumeEnabled = false;
+  bool _gaplessPlayback = false;
+  bool _crossfadeEnabled = false;
+  int _crossfadeDurationMs = 1500;
 
   // Error logging constants
   static const int _maxTempFileAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
@@ -77,11 +80,21 @@ class AudioService {
     } catch (e) {
       print('[AudioService] Error stopping ad: $e');
     }
+
+    // Spotify-like ad logic: check if ad is due before playing a new song
+    final adManager = AdManagerService();
+    if (adManager.shouldPlayAdBeforeNextSong()) {
+      await adManager.playAd();
+      adManager.resetAdDue();
+    }
+
     if (song['audio_url'] == null && song['downloaded'] != true) {
       throw Exception('Cannot play song: Missing audio URL and not downloaded');
     }
 
     try {
+      // Notify ad manager that playback is starting
+      adManager.onPlaybackStarted();
       // Dispose previous song resources
       await player.stop();
       _disposeCurrentSongResources();
@@ -428,15 +441,22 @@ class AudioService {
 
   // Pause the current audio
   Future<void> pause() async {
-    if (!player.playing) return;
+    await player.pause();
+    AdManagerService().onPlaybackPaused();
+    _isPlaying = false;
+    _isPlayingController.add(false);
+  }
 
-    try {
-      await player.pause();
-      _isPlaying = false;
-      _isPlayingController.add(false);
-    } catch (e) {
-      _handlePlaybackError(error: e);
-    }
+  Future<void> stop() async {
+    await player.stop();
+    AdManagerService().onPlaybackPaused();
+    _isPlaying = false;
+    _isPlayingController.add(false);
+  }
+
+  // Call this when a song finishes
+  void onSongFinished() {
+    AdManagerService().onSongFinished();
   }
   
   // Check if a song is downloaded
@@ -449,13 +469,16 @@ class AudioService {
     return await _downloadService.getDownloadedAlbums();
   }
 
-  /// Set crossfade duration for transitions between tracks
-  /// @param milliseconds - duration of crossfade in milliseconds, null to use default
-  void setCrossfadeDuration(int? milliseconds) {
-    _baseCrossfadeDuration = milliseconds;
-    // The actual crossfade implementation depends on just_audio capabilities
-    // and would be applied when setting up audio sources
+  /// Set gapless playback mode
+  /// just_audio supports gapless playback by default when using ConcatenatingAudioSource.
+  /// This method is a placeholder for future extensibility.
+  void setGaplessPlayback(bool enabled) {
+    _gaplessPlayback = enabled;
+    // just_audio is gapless by default with ConcatenatingAudioSource, so no-op for now.
+    // If you want to disable gapless, you could implement a workaround here.
   }
+
+  bool get gaplessPlayback => _gaplessPlayback;
 
   void adjustVolume(double increment) {
     if (!_adaptiveVolumeEnabled) return;
@@ -552,4 +575,39 @@ class AudioService {
     // Optionally, reset per-song state
     // (If you add per-song subscriptions or listeners, cancel them here)
   }
+
+  // When playing a queue, ensure ConcatenatingAudioSource is used for gapless playback
+  Future<void> playQueue(List<Map<String, dynamic>> queue, {int startIndex = 0}) async {
+    _queue = queue;
+    _currentIndex = startIndex;
+    if (_queue.isEmpty) return;
+    final sources = _queue.map((song) {
+      final mediaItem = MediaItem(
+        id: song['id']?.toString() ?? '',
+        title: song['title']?.toString() ?? 'Unknown',
+        artist: song['artist']?.toString() ?? 'Unknown Artist',
+        duration: song['duration'] != null
+            ? Duration(seconds: song['duration'] is int
+                ? song['duration']
+                : int.tryParse(song['duration'].toString()) ?? 0)
+            : null,
+        artUri: song['image_url'] != null ? Uri.parse(sanitizeUrl(song['image_url'])) : null,
+      );
+      return AudioSource.uri(
+        Uri.parse(sanitizeUrl(song['audio_url'])),
+        tag: mediaItem,
+      );
+    }).toList();
+    final playlist = ConcatenatingAudioSource(children: sources);
+    AudioSource finalSource = playlist;
+    // Crossfade is not supported in the current just_audio version.
+    // No crossfade can be set on the player.
+    await player.setAudioSource(finalSource, initialIndex: startIndex);
+    await player.play();
+    _isPlaying = true;
+    _isPlayingController.add(true);
+  }
+
+  bool get crossfadeEnabled => _crossfadeEnabled;
+  int get crossfadeDurationMs => _crossfadeDurationMs;
 }
