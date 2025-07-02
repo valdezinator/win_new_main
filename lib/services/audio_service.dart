@@ -511,7 +511,9 @@ class AudioService {
 
   Future<void> playNext() async {
     try {
+      print('[AudioService] playNext called. _queue length: ${_queue.length}, _currentIndex: ${_currentIndex}');
       if (_queue.isEmpty || _currentIndex >= _queue.length - 1) {
+        print('[AudioService] playNext: End of queue or queue is empty. Stopping playback.');
         if (player.playing) await player.stop();
         _isPlaying = false;
         _isPlayingController.add(false);
@@ -519,14 +521,29 @@ class AudioService {
       }
 
       _currentIndex++;
+      if (_currentIndex < 0 || _currentIndex >= _queue.length) {
+        print('[AudioService] playNext: _currentIndex out of bounds after increment: ${_currentIndex}');
+        _isPlaying = false;
+        _isPlayingController.add(false);
+        return;
+      }
       final nextSongMap = _queue[_currentIndex];
+      if (nextSongMap == null) {
+        print('[AudioService] playNext: nextSongMap is null at index ${_currentIndex}');
+        _isPlaying = false;
+        _isPlayingController.add(false);
+        return;
+      }
       final songToPlay = {
         ...Map<String, dynamic>.from(nextSongMap),
         'queue': _queue,
       };
 
+      print('[AudioService] playNext: Playing song at index ${_currentIndex} with id: ${songToPlay['id']}');
       await playSong(songToPlay, restorePosition: false);
-    } catch (e) {
+    } catch (e, stack) {
+      print('[AudioService] playNext: Exception: ${e.toString()}');
+      print(stack);
       _handlePlaybackError(error: e);
     }
   }

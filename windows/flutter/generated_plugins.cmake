@@ -13,6 +13,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   screen_retriever
   sentry_flutter
   url_launcher_windows
+  win_toast
   window_manager
   window_to_front
 )

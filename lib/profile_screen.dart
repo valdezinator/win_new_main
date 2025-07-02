@@ -12,6 +12,7 @@ import 'services/payment_service.dart';
 import 'services/auth_service.dart';
 import 'widgets/subscription_manager.dart';
 import 'services/audio_service.dart';
+import 'services/notification_service.dart';
 
 /// SettingsScreen: Comprehensive settings page for the music app
 /// Redesigned to match Spotify Desktop layout with sidebar navigation
@@ -64,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ];
 
   final AudioService _audioService = AudioService();
+  final NotificationService _notificationService = NotificationService();
 
   @override
   void initState() {
@@ -73,6 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _getAppVersion();
     _initializeServices();
     _initPaymentService();
+    _notificationService.initialize();
   }
   
   // Initialize payment service
@@ -485,9 +488,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'New Releases',
                   'Get notified about new music',
                   _notifyNewReleases,
-                  (value) {
+                  (value) async {
                     setState(() => _notifyNewReleases = value);
                     _saveSetting('notify_new_releases', value);
+                    if (value) {
+                      await _notificationService.showTestNotification('new_release');
+                    }
                   },
                 ),
                 _buildDivider(),
@@ -495,9 +501,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Playlist Updates',
                   'Updates to your playlists',
                   _notifyPlaylistUpdates,
-                  (value) {
+                  (value) async {
                     setState(() => _notifyPlaylistUpdates = value);
                     _saveSetting('notify_playlist_updates', value);
+                    if (value) {
+                      await _notificationService.showTestNotification('playlist_update');
+                    }
                   },
                 ),
                 _buildDivider(),
@@ -505,9 +514,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'App Updates',
                   'Important news and updates',
                   _notifyAppUpdates,
-                  (value) {
+                  (value) async {
                     setState(() => _notifyAppUpdates = value);
                     _saveSetting('notify_app_updates', value);
+                    if (value) {
+                      await _notificationService.showTestNotification('app_update');
+                    }
                   },
                 ),
               ],

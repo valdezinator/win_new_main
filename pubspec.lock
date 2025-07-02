@@ -755,10 +755,10 @@ packages:
     dependency: "direct main"
     description:
       name: just_audio
-      sha256: "679637a3ec5b6e00f36472f5a3663667df00ee4822cbf5dafca0f568c710960a"
+      sha256: f978d5b4ccea08f267dae0232ec5405c1b05d3f3cd63f82097ea46c015d5c09e
       url: "https://pub.dev"
     source: hosted
-    version: "0.10.4"
+    version: "0.9.46"
   just_audio_background:
     dependency: "direct main"
     description:
@@ -1812,6 +1812,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.5"
+  win_toast:
+    dependency: "direct main"
+    description:
+      name: win_toast
+      sha256: "6c01a3a382b129847c9d1a51dde1323239f4f0844424c674a44a08515323987d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
   window_manager:
     dependency: "direct main"
     description:
