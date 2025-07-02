@@ -1267,15 +1267,6 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
             // Header with view toggle and create button
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.05),
-                    width: 1,
-                  ),
-                ),
-              ),
               child: Column(
                 children: [
                   // Title and action buttons row

@@ -545,9 +545,19 @@ class _SubscriptionManagerState extends State<SubscriptionManager> {
       ),
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: _availablePlans.map((plan) =>
-          Expanded(child: _buildPlanCard(plan))
-        ).toList(),
+        children: _availablePlans.asMap().entries.map((entry) {
+          final index = entry.key;
+          final plan = entry.value;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: index > 0 ? 12.0 : 0.0,
+                right: index < _availablePlans.length - 1 ? 12.0 : 0.0,
+              ),
+              child: _buildPlanCard(plan),
+            ),
+          );
+        }).toList(),
       ),
     ];
   }

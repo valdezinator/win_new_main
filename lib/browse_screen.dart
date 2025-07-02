@@ -2648,7 +2648,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     try {
       // Fetch liked songs from the database
       final response = await widget.supabaseClient
-          .from('user_likes')
+          .from('user_favorites')
           .select('''
             song_id,
             songs_2 (
