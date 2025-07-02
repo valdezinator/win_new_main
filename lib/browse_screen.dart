@@ -64,6 +64,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   int? _hoveredSongIndex;
 
   final Map<String, Map<String, dynamic>> _songCache = {};
+  
+  // Add image URL cache to prevent repeated fetching
+  final Map<String, String> _imageUrlCache = {};
 
   @override
   void initState() {
@@ -81,6 +84,26 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     // Initialize current playing index if a song is playing
     if (widget.currentlyPlayingSong != null) {
       _updateCurrentPlayingIndex();
+    }
+  }
+
+  // Helper method to get cached image URL
+  Future<String> _getCachedImageUrl(String? imageUrl, String? imageIdentifier) async {
+    if (imageUrl == null) return '';
+    
+    final cacheKey = '${imageUrl}_${imageIdentifier ?? ''}';
+    
+    if (_imageUrlCache.containsKey(cacheKey)) {
+      return _imageUrlCache[cacheKey]!;
+    }
+    
+    try {
+      final resolvedUrl = await _backblazeService.getImageUrl(imageUrl, imageIdentifier);
+      _imageUrlCache[cacheKey] = resolvedUrl;
+      return resolvedUrl;
+    } catch (e) {
+      print('Error resolving image URL: $e');
+      return imageUrl; // Fallback to original URL
     }
   }
 
@@ -170,8 +193,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           .order('created_at', ascending: false)
           .limit(10);
 
+      final albumsList = List<Map<String, dynamic>>.from(response);
+      // Pre-resolve all album image URLs
+      for (var album in albumsList) {
+        try {
+          album['resolved_image_url'] = await _getCachedImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
-        featuredAlbums = List<Map<String, dynamic>>.from(response);
+        featuredAlbums = albumsList;
       });
     } catch (e) {
       print('Error loading featured albums: $e');
@@ -188,8 +224,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           .order('created_at', ascending: false)
           .limit(8);
 
+      final albumsList = List<Map<String, dynamic>>.from(response);
+      // Pre-resolve all album image URLs
+      for (var album in albumsList) {
+        try {
+          album['resolved_image_url'] = await _getCachedImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
-        recentlyPlayed = List<Map<String, dynamic>>.from(response);
+        recentlyPlayed = albumsList;
       });
     } catch (e) {
       print('Error loading recently played: $e');
@@ -206,8 +255,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           .order('created_at', ascending: false)
           .limit(6);
 
+      final albumsList = List<Map<String, dynamic>>.from(response);
+      // Pre-resolve all album image URLs
+      for (var album in albumsList) {
+        try {
+          album['resolved_image_url'] = await _getCachedImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
-        topCharts = List<Map<String, dynamic>>.from(response);
+        topCharts = albumsList;
       });
     } catch (e) {
       print('Error loading top charts: $e');
@@ -222,8 +284,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           .order('created_at', ascending: false)
           .limit(8);
 
+      final albumsList = List<Map<String, dynamic>>.from(response);
+      // Pre-resolve all album image URLs
+      for (var album in albumsList) {
+        try {
+          album['resolved_image_url'] = await _getCachedImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
-        newReleases = List<Map<String, dynamic>>.from(response);
+        newReleases = albumsList;
       });
     } catch (e) {
       print('Error loading new releases: $e');
@@ -319,8 +394,21 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             .order('created_at', ascending: false)
             .limit(6);
 
+        final albumsList = List<Map<String, dynamic>>.from(response);
+        // Pre-resolve all album image URLs
+        for (var album in albumsList) {
+          try {
+            album['resolved_image_url'] = await _getCachedImageUrl(
+              album['image_url'],
+              album['file_identifier'],
+            );
+          } catch (e) {
+            album['resolved_image_url'] = album['image_url'] ?? '';
+          }
+        }
+
         setState(() {
-          genreAlbums[genre['name']] = List<Map<String, dynamic>>.from(response);
+          genreAlbums[genre['name']] = albumsList;
         });
       }
     } catch (e) {
@@ -398,10 +486,35 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         };
       }).toList();
 
+      // Pre-resolve image URLs for songs
+      for (var song in songs) {
+        try {
+          song['resolved_image_url'] = await _getCachedImageUrl(
+            song['image_url'],
+            song['file_identifier'],
+          );
+        } catch (e) {
+          song['resolved_image_url'] = song['image_url'] ?? '';
+        }
+      }
+
+      final albums = List<Map<String, dynamic>>.from(results[1]);
+      // Pre-resolve image URLs for albums
+      for (var album in albums) {
+        try {
+          album['resolved_image_url'] = await _getCachedImageUrl(
+            album['image_url'],
+            album['file_identifier'],
+          );
+        } catch (e) {
+          album['resolved_image_url'] = album['image_url'] ?? '';
+        }
+      }
+
       setState(() {
         categorizedResults = {
           'Songs': songs,
-          'Albums': List<Map<String, dynamic>>.from(results[1]),
+          'Albums': albums,
           'Artists': List<Map<String, dynamic>>.from(results[2]),
         };
         isSearching = false;
@@ -716,38 +829,22 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: FutureBuilder<String>(
-                      future: _backblazeService.getImageUrl(
-                        song['image_url'],
-                        song['file_identifier'],
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: Icon(
-                              Icons.music_note,
-                              color: Colors.white,
-                              size: compact ? 20 : 24,
+                    child: song['resolved_image_url'] != null && song['resolved_image_url'].isNotEmpty
+                        ? Image.network(
+                            song['resolved_image_url'],
+                            width: compact ? 40 : 48,
+                            height: compact ? 40 : 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey[850],
+                              child: Icon(
+                                Icons.music_note,
+                                color: Colors.white,
+                                size: compact ? 20 : 24,
+                              ),
                             ),
-                          );
-                        }
-                        if (snapshot.hasError) {
-                          return Container(
-                            color: Colors.grey[850],
-                            child: Icon(
-                              Icons.music_note,
-                              color: Colors.white,
-                              size: compact ? 20 : 24,
-                            ),
-                          );
-                        }
-                        return Image.network(
-                          snapshot.data!,
-                          width: compact ? 40 : 48,
-                          height: compact ? 40 : 48,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          )
+                        : Container(
                             color: Colors.grey[850],
                             child: Icon(
                               Icons.music_note,
@@ -755,9 +852,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                               size: compact ? 20 : 24,
                             ),
                           ),
-                        );
-                      },
-                    ),
                   ),
                   if (isCurrentlyPlaying)
                     Positioned.fill(
@@ -795,7 +889,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (isHovered && !compact)
+                ...(isHovered && !compact ? [
                   IconButton(
                     icon: Icon(
                       Icons.favorite_border,
@@ -807,8 +901,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     constraints: const BoxConstraints(),
                     splashRadius: 20,
                   ),
-                if (isHovered && !compact)
                   const SizedBox(width: 16),
+                ] : []),
                 Text(
                   _formatDuration(song['duration']),
                   style: TextStyle(
@@ -816,7 +910,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     fontSize: compact ? 12 : 14,
                   ),
                 ),
-                if (isHovered) ...[
+                ...(isHovered ? [
                   const SizedBox(width: 16),
                   IconButton(
                     key: moreButtonKey, // <-- use the key here
@@ -847,7 +941,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     constraints: const BoxConstraints(),
                     splashRadius: compact ? 16 : 20,
                   ),
-                ],
+                ] : []),
               ],
             ),
             onTap: () => _playSearchResult(song),
@@ -1967,40 +2061,23 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   Widget _buildTopResultImage(Map<String, dynamic> item, double size) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: FutureBuilder<String>(
-        future: _backblazeService.getImageUrl(
-          item['image_url'],
-          item['file_identifier'],
-        ),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Container(
+      child: item['resolved_image_url'] != null && item['resolved_image_url'].isNotEmpty
+          ? Image.network(
+              item['resolved_image_url'],
               width: size,
               height: size,
-              color: Colors.grey[850],
-              child: const Icon(Icons.music_note, size: 50, color: Colors.white),
-            );
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return Container(
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey[850],
+                child: const Icon(Icons.music_note, size: 50, color: Colors.white),
+              ),
+            )
+          : Container(
               width: size,
               height: size,
-              color: Colors.grey[850],
-              child: const Icon(Icons.music_note, size: 50, color: Colors.white),
-            );
-          }
-          return Image.network(
-            snapshot.data!,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
               color: Colors.grey[850],
               child: const Icon(Icons.music_note, size: 50, color: Colors.white),
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -2110,42 +2187,29 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               // Album Art
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: FutureBuilder<String>(
-                  future: _backblazeService.getImageUrl(
-                    song['image_url'],
-                    song['file_identifier'],
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Container(
+                child: song['resolved_image_url'] != null && song['resolved_image_url'].isNotEmpty
+                    ? Image.network(
+                        song['resolved_image_url'],
                         width: 48,
                         height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey[850],
+                          child: Icon(
+                            Icons.music_note,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      )
+                    : Container(
                         color: Colors.grey[850],
-                        child: const Icon(Icons.music_note, size: 24, color: Colors.white),
-                      );
-                    }
-                    if (snapshot.hasError || !snapshot.hasData) {
-                      return Container(
-                        width: 48,
-                        height: 48,
-                        color: Colors.grey[850],
-                        child: const Icon(Icons.music_note, size: 24, color: Colors.white),
-                      );
-                    }
-                    return Image.network(
-                      snapshot.data!,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 48,
-                        height: 48,
-                        color: Colors.grey[850],
-                        child: const Icon(Icons.music_note, size: 24, color: Colors.white),
+                        child: Icon(
+                          Icons.music_note,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
-                    );
-                  },
-                ),
               ),
               const SizedBox(width: 16),
               // Song Info
@@ -2186,7 +2250,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               ),
               const SizedBox(width: 16),
               // Actions
-              if (isHovered || isCurrentlyPlaying)
+              ...(isHovered || isCurrentlyPlaying ? [
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -2245,6 +2309,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                     ),
                   ],
                 ),
+              ] : []),
             ],
           ),
         ),
@@ -2555,8 +2620,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         items: recentlyPlayed.map((album) => {
           'title': album['title'] ?? 'Unknown Album',
           'subtitle': album['artist'] ?? 'Unknown Artist',
-          'image_url': album['image_url'],
-          'file_identifier': album['file_identifier'],
+          'resolved_image_url': album['resolved_image_url'],
           'type': 'album',
           'data': album,
         }).toList(),
@@ -2615,6 +2679,18 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         return;
       }
 
+      // Pre-resolve image URLs for liked songs
+      for (var song in likedSongs) {
+        try {
+          song['resolved_image_url'] = await _getCachedImageUrl(
+            song['image_url'],
+            song['file_identifier'],
+          );
+        } catch (e) {
+          song['resolved_image_url'] = song['image_url'] ?? '';
+        }
+      }
+
       showDialog(
         context: context,
         builder: (context) => _buildQuickActionDialog(
@@ -2623,8 +2699,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           items: likedSongs.map((song) => {
             'title': song['title'] ?? 'Unknown Song',
             'subtitle': song['artist'] ?? 'Unknown Artist',
-            'image_url': song['image_url'],
-            'file_identifier': song['file_identifier'],
+            'resolved_image_url': song['resolved_image_url'],
             'type': 'song',
             'data': song,
           }).toList(),
@@ -2730,8 +2805,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
           return {
             'title': '${index + 1}. ${album['title'] ?? 'Unknown Album'}',
             'subtitle': album['artist'] ?? 'Unknown Artist',
-            'image_url': album['image_url'],
-            'file_identifier': album['file_identifier'],
+            'resolved_image_url': album['resolved_image_url'],
             'type': 'album',
             'data': album,
           };
@@ -2804,56 +2878,35 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               children: [
                             // Image
                 ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: FutureBuilder<String>(
-                                future: _backblazeService.getImageUrl(
-                                  item['image_url'],
-                                  item['file_identifier'],
-                                ),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return Container(
-                                      width: 48,
-                                      height: 48,
-                          color: Colors.grey[850],
-                                      child: Icon(
-                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
-                                        size: 24,
-                                        color: Colors.white,
-                                      ),
-                                    );
-                                  }
-                                  if (snapshot.hasError || !snapshot.hasData) {
-                                    return Container(
-                                      width: 48,
-                                      height: 48,
-                                      color: Colors.grey[850],
-                                      child: Icon(
-                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
-                                        size: 24,
-                                        color: Colors.white,
-                                      ),
-                                    );
-                                  }
-                                  return Image.network(
-                                    snapshot.data!,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 48,
-                                      height: 48,
-                                      color: Colors.grey[850],
-                                      child: Icon(
-                                        item['type'] == 'song' ? Icons.music_note : Icons.album,
-                                        size: 24,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                  borderRadius: BorderRadius.circular(6),
+                  child: item['resolved_image_url'] != null && item['resolved_image_url'].isNotEmpty
+                      ? Image.network(
+                          item['resolved_image_url'],
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.grey[850],
+                            child: Icon(
+                              item['type'] == 'song' ? Icons.music_note : Icons.album,
+                              size: 24,
+                              color: Colors.white,
                             ),
+                          ),
+                        )
+                      : Container(
+                          width: 48,
+                          height: 48,
+                          color: Colors.grey[850],
+                          child: Icon(
+                            item['type'] == 'song' ? Icons.music_note : Icons.album,
+                            size: 24,
+                            color: Colors.white,
+                          ),
+                        ),
+                ),
                             const SizedBox(width: 16),
                             
                             // Info
