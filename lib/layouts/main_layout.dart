@@ -316,7 +316,7 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
             AnimatedPositioned(
               duration: const Duration(milliseconds: 350),
               curve: Curves.ease,
-              top: 60.0,
+              top: 0,
               right: (widget.showQueue && widget.currentSong != null) ? 0 : -_panelWidth,
               bottom: 80.0, // Height of the MusicPlayer
               width: _panelWidth,
@@ -341,7 +341,7 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
               curve: Curves.ease,
               top: 0,
               right: widget.showLyrics ? 0 : -_panelWidth,
-              bottom: 80, // Height of the MusicPlayer
+              bottom: 80.0, // Height of the MusicPlayer
               width: _panelWidth,
               child: widget.showLyrics
                   ? Material(
@@ -376,14 +376,6 @@ class _MainLayoutState extends State<MainLayout> {  // Lyrics overlay state
                                 currentPosition: widget.lyricsCurrentPosition,
                                 totalDuration: widget.lyricsTotalDuration,
                                 accentColor: widget.lyricsAccentColor,
-                              ),
-                            ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: IconButton(
-                                icon: Icon(Icons.close, color: Colors.white.withOpacity(0.85)),
-                                onPressed: widget.closeLyricsPanel,
                               ),
                             ),
                           ],

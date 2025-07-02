@@ -150,29 +150,34 @@ class PaymentGateway {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
+        debugPrint('[Stripe Checkout] User not authenticated');
         throw Exception('User not authenticated');
       }
       
       // Use Supabase Edge Function to create checkout session
+      final params = {
+        'plan_id': planId,
+        'amount': amount,
+        'currency': currency,
+        'description': description,
+        'user_id': userId,
+        'customer_id': customerId,
+      };
+      debugPrint('[Stripe Checkout] Invoking Edge Function with params: '
+          'PlanId: $planId\nAmount: $amount\nCurrency: $currency\nDescription: $description\nUserId: $userId\nCustomerId: $customerId');
       final response = await _supabase.functions.invoke(
         'create-stripe-checkout',
-        body: {
-          'plan_id': planId,
-          'amount': amount,
-          'currency': currency,
-          'description': description,
-          'user_id': userId,
-          'customer_id': customerId,
-        },
+        body: params,
       );
-      
+      debugPrint('[Stripe Checkout] Edge Function response: status=${response.status}, data=${response.data}');
       if (response.status != 200) {
+        debugPrint('[Stripe Checkout] Failed to create checkout session. Status: ${response.status}, Data: ${response.data}');
         throw Exception('Failed to create checkout session: ${response.data}');
       }
-      
       return response.data;
-    } catch (e) {
-      debugPrint('Error creating Stripe checkout session: $e');
+    } catch (e, stack) {
+      debugPrint('[Stripe Checkout] Error creating Stripe checkout session: $e');
+      debugPrint('[Stripe Checkout] Stack trace: $stack');
       rethrow;
     }
   }

@@ -621,7 +621,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Dynamic Playlists Section
             DynamicPlaylistsSection(
               onPlaylistSelected: (playlist) {
-                _navigateToAlbum(playlist);
+                _navigateToAlbum({
+                  ...playlist,
+                  'playlist_name': playlist['name'] ?? playlist['playlist_name'] ?? playlist['title'],
+                  'title': playlist['name'] ?? playlist['playlist_name'] ?? playlist['title'],
+                });
               },
             ),
             const SizedBox(height: 40),

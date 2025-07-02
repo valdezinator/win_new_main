@@ -20,6 +20,7 @@ import 'widgets/ad_controls.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/analytics_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class MusicPlayer extends StatefulWidget {
   final Map<String, dynamic> song;
@@ -241,15 +242,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
         setState(() {
           currentPosition = position;
         });
-        // Update lyrics panel if it's shown
-        if (widget.onShowLyrics != null && widget.song['song_lyrics'] != null) {
-          widget.onShowLyrics!(                  accentColor: accentColor,
-                  currentPosition: position,
-                  totalDuration: totalDuration,
-                  lyrics: widget.song['song_lyrics'],
-                  translatedLyrics: widget.song['lyrics_in_eng'],
-                );
-        }
       }
     });
 
@@ -263,13 +255,6 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
     // Listen to player state changes
     _audioService.player.playerStateStream.listen((playerState) {
       if (mounted) {
-        // setState(() { // Original setState call
-        //   isPlaying = playerState.playing;
-        //   if (playerState.processingState == ProcessingState.completed) {
-        //     currentPosition = Duration.zero; // This was potentially problematic if completion logic relies on old position
-        //     _handleSongCompletion();
-        //   }
-        // });
         // Revised logic to handle completion more cleanly
         final wasPlaying = isPlaying;
         final newIsPlaying = playerState.playing;
@@ -690,10 +675,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   _buildHoverButton(
-                                    child: Icon(
-                                      Icons.shuffle,
+                                    child: SvgPicture.asset(
+                                      'assets/icons/shuffle.svg',
+                                      width: 22,
+                                      height: 22,
                                       color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                      size: 22,
                                     ),
                                     onPressed: toggleShuffle,
                                     padding: const EdgeInsets.all(8),
@@ -726,10 +712,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                   ),
                                   const SizedBox(width: 20),
                                   _buildHoverButton(
-                                    child: Icon(
-                                      Icons.repeat,
+                                    child: SvgPicture.asset(
+                                      'assets/icons/repeat.svg',
+                                      width: 22,
+                                      height: 22,
                                       color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                      size: 22,
                                     ),
                                     onPressed: toggleRepeat,
                                     padding: const EdgeInsets.all(8),
@@ -1109,10 +1096,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                       children: [
                                         // Shuffle button
                                         _buildHoverButton(
-                                          child: Icon(
-                                            Icons.shuffle,
+                                          child: SvgPicture.asset(
+                                            'assets/icons/shuffle.svg',
+                                            width: 16,
+                                            height: 16,
                                             color: isShuffleEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                            size: 16,
                                           ),
                                           onPressed: toggleShuffle,
                                         ),
@@ -1149,10 +1137,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
                                         // Repeat button
                                         _buildHoverButton(
-                                          child: Icon(
-                                            Icons.repeat,
+                                          child: SvgPicture.asset(
+                                            'assets/icons/repeat.svg',
+                                            width: 16,
+                                            height: 16,
                                             color: isRepeatEnabled ? accentColor : Colors.white.withOpacity(0.7),
-                                            size: 16,
                                           ),
                                           onPressed: toggleRepeat,
                                         ),
@@ -1171,20 +1160,22 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                   children: [
                                     // Queue button
                                     _buildHoverButton(
-                                      child: Icon(
-                                        Icons.queue_music,
+                                      child: SvgPicture.asset(
+                                        'assets/icons/queue.svg',
+                                        width: 16,
+                                        height: 16,
                                         color: widget.showQueue ? accentColor : Colors.white.withOpacity(0.7),
-                                        size: 16,
                                       ),
                                       onPressed: () => widget.onQueueToggle?.call(!widget.showQueue),
                                     ),
                                     const SizedBox(width: 12),
                                     // Lyrics button
                                     _buildHoverButton(
-                                      child: Icon(
-                                        Icons.format_quote,
+                                      child: SvgPicture.asset(
+                                        'assets/icons/quote.svg',
+                                        width: 16,
+                                        height: 16,
                                         color: (widget.song['song_lyrics'] != null) ? accentColor : Colors.white.withOpacity(0.7),
-                                        size: 16,
                                       ),
                                       onPressed: () {
                                         if (widget.onShowLyrics != null) {
@@ -1204,10 +1195,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
                                     const SizedBox(width: 12),
 
                                     // Volume control
-                                    Icon(
-                                      Icons.volume_up,
+                                    SvgPicture.asset(
+                                      'assets/icons/volume.svg',
+                                      width: 16,
+                                      height: 16,
                                       color: Colors.white.withOpacity(0.7),
-                                      size: 16,
                                     ),
                                     const SizedBox(width: 4),
 
@@ -1236,10 +1228,11 @@ class _MusicPlayerState extends State<MusicPlayer> with TickerProviderStateMixin
 
                                     // Full screen button
                                     _buildHoverButton(
-                                      child: Icon(
-                                        isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                                      child: SvgPicture.asset(
+                                        isFullScreen ? 'assets/icons/exit_fullscreen.svg' : 'assets/icons/fullscreen.svg',
+                                        width: 20,
+                                        height: 20,
                                         color: isFullScreen ? accentColor : Colors.white.withOpacity(0.7),
-                                        size: 20,
                                       ),
                                       onPressed: _toggleFullScreen,
                                     ),
