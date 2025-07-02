@@ -59,13 +59,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     {'title': 'Account', 'icon': Icons.person_outline},
     {'title': 'Playback', 'icon': Icons.play_circle_outline},
     {'title': 'Notifications', 'icon': Icons.notifications_outlined},
-    {'title': 'Appearance', 'icon': Icons.palette_outlined},
     {'title': 'Privacy', 'icon': Icons.security_outlined},
     {'title': 'About', 'icon': Icons.info_outline},
   ];
 
   final AudioService _audioService = AudioService();
   final NotificationService _notificationService = NotificationService();
+
+  // Playlists for sidebar
+  List<Map<String, dynamic>> _playlists = [];
+  bool _isLoadingPlaylists = false;
+  bool _playlistsExpanded = false;
+  String? _currentUserId;
 
   @override
   void initState() {
@@ -76,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _initializeServices();
     _initPaymentService();
     _notificationService.initialize();
+    _getCurrentUser();
   }
   
   // Initialize payment service
@@ -193,6 +199,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _getCurrentUser() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    final user = session?.user;
+    if (user != null) {
+      setState(() {
+        _currentUserId = user.id;
+      });
+      _fetchPlaylists();
+    }
+  }
+
+  Future<void> _fetchPlaylists() async {
+    setState(() {
+      _isLoadingPlaylists = true;
+    });
+    try {
+      if (_currentUserId == null) {
+        setState(() {
+          _playlists = [];
+          _isLoadingPlaylists = false;
+        });
+        return;
+      }
+      final data = await widget.supabaseClient
+          .from('playlist')
+          .select('id, playlist_name, image_url, user_id, description, created_at')
+          .eq('user_id', _currentUserId!)
+          .order('created_at', ascending: false);
+      setState(() {
+        _playlists = List<Map<String, dynamic>>.from(data ?? []);
+        _isLoadingPlaylists = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingPlaylists = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,10 +255,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      // IconButton(
-                      //   icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      //   onPressed: () => Navigator.of(context).pop(),
-                      // ),
                       const SizedBox(width: 16),
                       const Text(
                         'Settings',
@@ -226,40 +267,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                
-                // Navigation Items
+                // Navigation Items + Playlists
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: _navigationItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _navigationItems[index];
-                      final isSelected = _selectedIndex == index;
-                      
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF282828) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ListTile(
-                          leading: Icon(
-                            item['icon'],
-                            color: isSelected ? Colors.white : Colors.white70,
-                            size: 24,
-                          ),
-                          title: Text(
-                            item['title'],
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.white70,
-                              fontSize: 16,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  child: ListView(
+                    children: [
+                      ..._navigationItems.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final item = entry.value;
+                        final isSelected = _selectedIndex == index;
+                        final isLibrary = item['title'] == 'Library';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF282828) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: ListTile(
+                                leading: Icon(
+                                  item['icon'],
+                                  color: isSelected ? Colors.white : Colors.white70,
+                                  size: 24,
+                                ),
+                                title: Text(
+                                  item['title'],
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : Colors.white70,
+                                    fontSize: 16,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                                onTap: () => setState(() => _selectedIndex = index),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                trailing: isLibrary
+                                    ? IconButton(
+                                        icon: Icon(
+                                          _playlistsExpanded
+                                              ? Icons.expand_less
+                                              : Icons.expand_more,
+                                          color: Colors.white70,
+                                          size: 20,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            _playlistsExpanded = !_playlistsExpanded;
+                                          });
+                                        },
+                                      )
+                                    : null,
+                              ),
                             ),
-                          ),
-                          onTap: () => setState(() => _selectedIndex = index),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        ),
-                      );
-                    },
+                            if (isLibrary && _playlistsExpanded)
+                              _isLoadingPlaylists
+                                  ? const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    )
+                                  : Column(
+                                      children: [
+                                        ..._playlists.map((playlist) => ListTile(
+                                              leading: playlist['image_url'] != null && playlist['image_url'].toString().isNotEmpty
+                                                  ? ClipRRect(
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      child: Image.network(
+                                                        playlist['image_url'],
+                                                        width: 28,
+                                                        height: 28,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context, error, stackTrace) => Container(
+                                                          width: 28,
+                                                          height: 28,
+                                                          color: Colors.grey[800],
+                                                          child: const Icon(Icons.music_note, color: Colors.white54, size: 16),
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : const Icon(Icons.music_note, color: Colors.white54, size: 20),
+                                              title: Text(
+                                                playlist['playlist_name'] ?? 'Unnamed Playlist',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 15,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              onTap: () {
+                                                // TODO: Implement navigation to playlist
+                                              },
+                                              contentPadding: const EdgeInsets.only(left: 56, right: 8),
+                                            )),
+                                        ListTile(
+                                          leading: const Icon(Icons.add, color: Colors.white70, size: 20),
+                                          title: const Text(
+                                            'Create Playlist',
+                                            style: TextStyle(color: Colors.white70, fontSize: 15),
+                                          ),
+                                          onTap: () {
+                                            // TODO: Implement create playlist dialog
+                                          },
+                                          contentPadding: const EdgeInsets.only(left: 56, right: 8),
+                                        ),
+                                      ],
+                                    ),
+                          ],
+                        );
+                      }),
+                    ],
                   ),
                 ),
               ],
@@ -287,10 +407,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 2:
         return _buildNotificationsSection();
       case 3:
-        return _buildAppearanceSection();
-      case 4:
         return _buildPrivacySection();
-      case 5:
+      case 4:
         return _buildAboutSection();
       default:
         return _buildAccountSection();
@@ -530,36 +648,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildAppearanceSection() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader('Appearance'),
-          const SizedBox(height: 24),
-          
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF282828),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                _buildListTile(
-                  'Accent Color',
-                  'Customize the app\'s accent color',
-                  Icons.palette_outlined,
-                  onTap: _pickAccentColor,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildPrivacySection() {
     return SingleChildScrollView(
@@ -787,37 +875,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: EdgeInsets.symmetric(vertical: 8),
       child: Divider(color: Color(0xFF404040), height: 1),
     );
-  }
-
-  // Accent color picker dialog
-  void _pickAccentColor() async {
-    Color? picked = await showDialog<Color>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF282828),
-          title: const Text('Pick Accent Color', style: TextStyle(color: Colors.white)),
-          content: Wrap(
-            spacing: 10,
-            children: [
-              Colors.deepPurpleAccent,
-              Colors.blueAccent,
-              Colors.greenAccent,
-              Colors.redAccent,
-              Colors.orangeAccent,
-              Colors.pinkAccent,
-              Colors.amberAccent,
-              Colors.cyanAccent,
-            ].map((color) => GestureDetector(
-              onTap: () => Navigator.of(context).pop(color),
-              child: CircleAvatar(backgroundColor: color, radius: 18),
-            )).toList(),
-          ),
-        );
-      },
-    );
-    if (picked != null) {
-      _saveSetting('accent_color', picked.value);
-    }
   }
 }
