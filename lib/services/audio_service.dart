@@ -28,6 +28,7 @@ class AudioService {
   final _currentSongController = StreamController<Map<String, dynamic>>.broadcast();
   final _isPlayingController = StreamController<bool>.broadcast();
   final _errorController = StreamController<PlaybackError>.broadcast();
+  final _queueController = StreamController<List<Map<String, dynamic>>>.broadcast();
   final DownloadService _downloadService = DownloadService();
 
   Map<String, dynamic>? _currentSong;
@@ -42,7 +43,6 @@ class AudioService {
   static const Duration _errorResetDuration = Duration(minutes: 5);
     // For volume and crossfade control
   double _baseVolume = 0.7;
-  int? _baseCrossfadeDuration;
   bool _adaptiveVolumeEnabled = false;
   bool _gaplessPlayback = false;
   bool _crossfadeEnabled = false;
@@ -58,10 +58,17 @@ class AudioService {
   Stream<Map<String, dynamic>> get currentSongStream => _currentSongController.stream;
   Stream<bool> get isPlayingStream => _isPlayingController.stream;
   Stream<PlaybackError> get errorStream => _errorController.stream;
+  Stream<List<Map<String, dynamic>>> get queueStream => _queueController.stream;
 
   Map<String, dynamic>? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
   List<Map<String, dynamic>> get queue => _queue;
+
+  void _emitQueue() {
+    if (!_queueController.isClosed) {
+      _queueController.add(List<Map<String, dynamic>>.from(_queue));
+    }
+  }
 
   Future<bool> _checkInternetConnection() async {
     try {
@@ -125,6 +132,7 @@ class AudioService {
       if (song['queue'] != null) {
         _queue = List<Map<String, dynamic>>.from(song['queue']);
         _currentIndex = _queue.indexWhere((s) => s['id'] == song['id']);
+  _emitQueue();
       }
 
       final songId = processedSong['id']?.toString();
@@ -532,6 +540,7 @@ class AudioService {
     await player.dispose();
     await _currentSongController.close();
     await _isPlayingController.close();
+  await _queueController.close();
   }
 
   bool _appendedRecommendations = false; // Prevent infinite loop
@@ -576,21 +585,15 @@ class AudioService {
         _appendedRecommendations = false;
         return;
       }
-      final nextSongMap = _queue[_currentIndex];
-      if (nextSongMap == null) {
-        print('[AudioService] playNext: nextSongMap is null at index ${_currentIndex}');
-        _isPlaying = false;
-        _isPlayingController.add(false);
-        _appendedRecommendations = false;
-        return;
-      }
+  final nextSongMap = _queue[_currentIndex];
       final songToPlay = {
         ...Map<String, dynamic>.from(nextSongMap),
         'queue': _queue,
       };
 
       print('[AudioService] playNext: Playing song at index ${_currentIndex} with id: ${songToPlay['id']}');
-      await playSong(songToPlay, restorePosition: false);
+  await playSong(songToPlay, restorePosition: false);
+  _emitQueue();
     } catch (e, stack) {
       print('[AudioService] playNext: Exception: ${e.toString()}');
       print(stack);
@@ -612,7 +615,8 @@ class AudioService {
           ...Map<String, dynamic>.from(prevSongMap),
           'queue': _queue,
         };
-        await playSong(songToPlay, restorePosition: false);
+  await playSong(songToPlay, restorePosition: false);
+  _emitQueue();
       } else {
         await player.seek(Duration.zero);
       }
@@ -673,7 +677,47 @@ class AudioService {
     await player.play();
     _isPlaying = true;
     _isPlayingController.add(true);
+    _emitQueue();
   }
+
+  // Queue manipulation helpers
+  void addToQueue(Map<String, dynamic> song) {
+    _queue.add(song);
+    _emitQueue();
+  }
+
+  void playNextInsert(Map<String, dynamic> song) {
+    final insertIndex = _currentIndex + 1;
+    if (insertIndex <= _queue.length) {
+      _queue.insert(insertIndex, song);
+    } else {
+      _queue.add(song);
+    }
+    _emitQueue();
+  }
+
+  void removeFromQueue(String songId) {
+    int? removedIndex;
+    for (var i = 0; i < _queue.length; i++) {
+      if (_queue[i]['id']?.toString() == songId) {
+        removedIndex = i;
+        break;
+      }
+    }
+    if (removedIndex != null) {
+      _queue.removeAt(removedIndex);
+      if (removedIndex < _currentIndex) {
+        _currentIndex--;
+      } else if (removedIndex == _currentIndex) {
+        if (_currentIndex >= _queue.length) {
+          _currentIndex = _queue.length - 1;
+        }
+      }
+      _emitQueue();
+    }
+  }
+
+  int get currentQueueIndex => _currentIndex;
 
   bool get crossfadeEnabled => _crossfadeEnabled;
   int get crossfadeDurationMs => _crossfadeDurationMs;

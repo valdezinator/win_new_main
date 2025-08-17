@@ -124,10 +124,20 @@ class _QueueListState extends State<QueueList> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
           height: _songItemHeight,
-          color: isHovered ? Theme.of(context).hoverColor.withOpacity(0.5) : Colors.transparent,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isCurrentSong
+                ? Colors.green.withOpacity(0.15)
+                : (isHovered ? Colors.white.withOpacity(0.04) : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
+            border: isCurrentSong
+                ? Border.all(color: Colors.green.withOpacity(0.4), width: 1)
+                : null,
+          ),
           child: Row(
             children: [
               ClipRRect(
@@ -180,7 +190,10 @@ class _QueueListState extends State<QueueList> {
                 ),
               ),
               if (isCurrentSong)
-                Icon(Icons.volume_up, color: Colors.white, size: 20),
+                const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Icon(Icons.volume_up, color: Colors.green, size: 18),
+                ),
             ],
           ),
         ),
@@ -307,185 +320,175 @@ class _QueueListState extends State<QueueList> {
     // print('Next Up Queue: ${nextUpQueue.map((s) => s['title']).toList()}');
 
 
-    return Padding( // Add padding around the Card for a floating effect
-      padding: const EdgeInsets.all(8.0), // Adjust padding as needed
-      child: Card(
-        elevation: 8, // Add elevation for shadow
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12), // Rounded corners
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 12, 12),
+      child: Container(
+        width: 350,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1E24).withOpacity(0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white10),
+          boxShadow: const [
+            BoxShadow(color: Colors.black54, blurRadius: 24, offset: Offset(0, 12)),
+          ],
         ),
-        // Use a slightly transparent background to blend with the app theme
-        // Consider using Theme.of(context).cardColor or a custom color
-        color: Colors.black!.withOpacity(0.95), // Changed to a specific dark color
-        clipBehavior: Clip.antiAlias, // Ensures content respects rounded corners
-        child: SizedBox( // Constrain the width of the QueueList
-          width: 350, // Adjust width as desired
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Important for Column in a Card
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [              Padding(
-                padding: const EdgeInsets.only(top: 16.0, left: 16.0, right: 8.0, bottom: 8.0),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.only(top: 14, left: 16, right: 4, bottom: 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.queue_music, size: 18, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Queue', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.2)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 18, color: Colors.white54),
+                    onPressed: widget.onClose,
+                    tooltip: 'Close queue',
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Colors.white10),
+
+            // Jam Session Controls / Active Session
+            if (!_isInJamSession) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Queue',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white, // Changed to white
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.headphones, size: 16),
+                        label: const Text('Start a Jam'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.black,
+                        ),
+                        onPressed: _isJoining ? null : _startJamSession,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70), // Changed to white70 for slight dimming
-                      onPressed: widget.onClose,
-                      splashRadius: 20,
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[700],
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _isJoining ? null : _showJoinSessionDialog,
+                      child: const Text('Join'),
                     ),
                   ],
                 ),
               ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+            ] else ...[
+              StreamBuilder<Map<String, dynamic>?>(
+                stream: _jamService.sessionStream,
+                initialData: _jamService.currentSession,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final session = snapshot.data!;
+                    return JamSessionControls(
+                      sessionId: session['id'],
+                      sessionName: session['name'],
+                      hostName: session['host_name'],
+                      isHost: _jamService.isHost,
+                      onEnd: _endJamSession,
+                    );
+                  }
+                  return const SizedBox();
+                },
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+            ],
 
-              // Jam Session Controls
-              if (!_isInJamSession) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.headphones, size: 16),
-                          label: const Text('Start a Jam'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.black,
-                          ),
-                          onPressed: _isJoining ? null : _startJamSession,
-                        ),
+            if (nowPlayingSong != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'Now Playing',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white60,
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[700],
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: _isJoining ? null : _showJoinSessionDialog,
-                        child: const Text('Join'),
-                      ),
-                    ],
-                  ),
                 ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-              ] else ...[
-                // Show Jam Session Controls for active session
-                StreamBuilder<Map<String, dynamic>?>(
-                  stream: _jamService.sessionStream,
-                  initialData: _jamService.currentSession,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData && snapshot.data != null) {
-                      final session = snapshot.data!;
-                      final isHost = _jamService.isHost;
+              ),
+              _buildSongItem(
+                nowPlayingSong,
+                true,
+                hoveredIndex == nowPlayingSong['id'].hashCode,
+                onTap: () => widget.onSongSelected?.call(nowPlayingSong!),
+              ),
+              if (nextUpQueue.isNotEmpty)
+                const Divider(height: 1, color: Colors.white10, indent: 16, endIndent: 16),
+            ],
 
-                      return JamSessionControls(
-                        sessionId: session['id'],
-                        sessionName: session['name'],
-                        hostName: session['host_name'],
-                        isHost: isHost,
-                        onEnd: _endJamSession,
-                      );
-                    }
-                    return const SizedBox();
+            if (nextUpQueue.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'Next Up',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white60,
+                      ),
+                ),
+              ),
+              Expanded(
+                child: ReorderableListView.builder(
+                  itemCount: nextUpQueue.length,
+                  buildDefaultDragHandles: false,
+                  onReorder: (oldIndex, newIndex) {
+                    setState(() {
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final item = nextUpQueue.removeAt(oldIndex);
+                      nextUpQueue.insert(newIndex, item);
+                      final fullQueue = [if (nowPlayingSong != null) nowPlayingSong, ...nextUpQueue];
+                      widget.onQueueReordered?.call(fullQueue);
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final song = nextUpQueue[index];
+                    return ReorderableDragStartListener(
+                      key: ValueKey(song['id'] ?? index),
+                      index: index,
+                      child: _buildSongItem(
+                        song,
+                        false,
+                        hoveredIndex == song['id'].hashCode,
+                        onTap: () => widget.onSongSelected?.call(song),
+                      ),
+                    );
                   },
                 ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-              ],
-              if (nowPlayingSong != null) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Text(
-                    'Now Playing',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70,
-                    ),
+              ),
+            ] else if (nowPlayingSong != null) ...[
+              const Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: const Text('No songs up next.', style: TextStyle(color: Colors.white38)),
                   ),
                 ),
-                _buildSongItem(nowPlayingSong, true, hoveredIndex == nowPlayingSong['id'].hashCode, onTap: () {
-                  if (widget.onSongSelected != null) {
-                    widget.onSongSelected!(nowPlayingSong!);
-                  }
-                }),
-                if (nextUpQueue.isNotEmpty)
-                  const Divider(height: 1, indent: 16, endIndent: 16),
-              ],
-
-              if (nextUpQueue.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Text(
-                    'Next Up',
-                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ),
-                Expanded( // Make the "Next Up" list scrollable
-                  child: ReorderableListView.builder(
-                    itemCount: nextUpQueue.length,
-                    buildDefaultDragHandles: false,
-                    onReorder: (oldIndex, newIndex) {
-                      setState(() {
-                        if (newIndex > oldIndex) newIndex -= 1;
-                        final item = nextUpQueue.removeAt(oldIndex);
-                        nextUpQueue.insert(newIndex, item);
-                        // Rebuild the full queue: nowPlayingSong + nextUpQueue
-                        final fullQueue = [if (nowPlayingSong != null) nowPlayingSong!, ...nextUpQueue];
-                        if (widget.onQueueReordered != null) {
-                          widget.onQueueReordered!(fullQueue);
-                        }
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      final song = nextUpQueue[index];
-                      return ReorderableDragStartListener(
-                        key: ValueKey(song['id'] ?? index),
-                        index: index,
-                        child: _buildSongItem(song, false, hoveredIndex == song['id'].hashCode, onTap: () {
-                          if (widget.onSongSelected != null) {
-                            widget.onSongSelected!(song);
-                          }
-                        }),
-                      );
-                    },
-                  ),
-                ),
-              ] else if (nowPlayingSong != null) ...[ // Show if only "Now Playing" is there
-                Expanded( // Removed const
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'No songs up next.',
-                        style: TextStyle(color: Colors.white38),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-
-              if (nowPlayingSong == null && nextUpQueue.isEmpty)
-                Expanded( // Removed const
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Queue is empty.',
-                        style: TextStyle(color: Colors.white38),
-                      ),
-                    ),
-                  ),
-                ),
+              ),
             ],
-          ),
+
+            if (nowPlayingSong == null && nextUpQueue.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Queue is empty.', style: TextStyle(color: Colors.white38)),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

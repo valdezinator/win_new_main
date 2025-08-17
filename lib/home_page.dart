@@ -2,18 +2,15 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io'; // Add this import for InternetAddress
 import 'browse_screen.dart';
-import 'album_view.dart';
 import 'services/audio_service.dart';
 import 'services/jam_session_service.dart';
 import 'services/dynamic_playlist_service.dart';
 import 'services/listening_time_service.dart';
 import 'library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'profile_screen.dart';
 import 'layouts/content_view.dart';
@@ -21,8 +18,16 @@ import 'widgets/dynamic_playlists_section.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 import 'package:palette_generator/palette_generator.dart';
 import 'services/backblaze_service.dart';
-import 'widgets/quick_play_section.dart';
 import 'services/recommendation_service.dart';
+// New reusable UI widgets
+import 'widgets/section_container.dart';
+import 'widgets/skeleton.dart';
+// (hoverable & playing_indicator now used only via extracted widgets)
+// Extracted home widgets
+import 'widgets/home/hit_album_card.dart';
+import 'widgets/home/artist_circle.dart';
+import 'widgets/home/recommended_song_card.dart';
+import 'widgets/home/quick_play_song_card.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -45,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final SupabaseClient supabaseClient = Supabase.instance.client;
   late TabController _tabController;
   Map<String, dynamic>? _currentSong;
-  bool showQueue = false;
   final AudioService _audioService = AudioService();
   final DynamicPlaylistService _dynamicPlaylistService = DynamicPlaylistService(Supabase.instance.client);
   final BackblazeService _backblazeService = BackblazeService();
@@ -54,6 +58,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final RecommendationService _recommendationService = RecommendationService();
   List<Map<String, dynamic>>? _recommendedSongs;
   bool _isLoadingRecommendations = true;
+
+  // Scroll persistence for home content
+  final ScrollController _homeScrollController = ScrollController();
+  double _savedHomeScrollOffset = 0.0;
+
+  // Quick Play refactored state (replaces inline QuickPlaySection until full migration)
+  bool _isQuickPlayLoading = true;
+  String? _quickPlayError;
+  List<Map<String, dynamic>> _quickPlaySongs = [];
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -72,6 +85,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeDynamicPlaylistService();
     _initializeListeningTimeService();
     _loadRecommendations();
+    _loadQuickPlaySongs();
+
+    // Restore scroll offset after first frame if any
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_savedHomeScrollOffset > 0 && _homeScrollController.hasClients) {
+        _homeScrollController.jumpTo(_savedHomeScrollOffset);
+      }
+    });
 
     // Debug: Check authentication state
     final user = supabaseClient.auth.currentUser;
@@ -115,6 +136,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Save home scroll position
+    if (_homeScrollController.hasClients) {
+      _savedHomeScrollOffset = _homeScrollController.offset;
+    }
+    _homeScrollController.dispose();
     // Cancel audio subscription
     _audioSubscription?.cancel();
 
@@ -130,6 +156,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Call super.dispose() last
     super.dispose();
+  }
+
+  // Load Quick Play songs (refactored version with fine-grained state & skeletons)
+  Future<void> _loadQuickPlaySongs() async {
+    setState(() {
+      _isQuickPlayLoading = true;
+      _quickPlayError = null;
+    });
+    try {
+      final response = await supabaseClient
+          .from('songs_2')
+          .select('id, title, artist, audio_url, image_url, duration, file_identifier')
+          .order('title');
+      if (!mounted) return;
+      setState(() {
+        _quickPlaySongs = List<Map<String, dynamic>>.from(response);
+        _isQuickPlayLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _quickPlayError = e.toString();
+        _isQuickPlayLoading = false;
+      });
+    }
   }
 
   // Separate async method to save song state
@@ -323,153 +374,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  Widget _buildAlbumCard(Map<String, dynamic> album) {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return MouseRegion(
-          onEnter: (_) => setState(() {}),
-          onExit: (_) => setState(() {}),
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AlbumView(
-                    album: {
-                      ...album,
-                      'id': album['id'], // Ensure ID is passed
-                      'title': album['title'] ?? 'Unknown Album',
-                      'artist': album['artist'] ?? 'Unknown Artist',
-                      'image_url': album['image_url'],
-                      'category': album['category'] ?? 'album'
-                    },
-                    supabaseClient: supabaseClient,
-                    onSongSelected: (song) {
-                      setState(() => _currentSong = song);
-                      _audioService.playSong(song, restorePosition: false);
-                    },
-                    currentlyPlayingSong: _currentSong,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              width: 200,
-              margin: const EdgeInsets.only(right: 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withOpacity(0.05),
-                ),
-                child: SingleChildScrollView( // Wrap in SingleChildScrollView
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min, // Add this
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                        child: album['image_url'] != null
-                          ? CachedNetworkImage(
-                              imageUrl: album['image_url'],
-                              height: 200,
-                              width: 200,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) =>
-                                Container(
-                                  height: 200,
-                                  width: 200,
-                                  color: Colors.grey[800],
-                                  child: const Icon(Icons.album, color: Colors.white, size: 50),
-                                ),
-                            )
-                          : Container(
-                              height: 200,
-                              width: 200,
-                              color: Colors.grey[800],
-                              child: const Icon(Icons.album, color: Colors.white, size: 50),
-                            ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              album['title'] ?? 'No Title',
-                              style: GoogleFonts.montserrat(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w300,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              album['artist'] ?? 'Unknown Artist',
-                              style: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 14,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    );
-  }
-
-  // NEW: Helper to build a trending card (similar to quick play)
-  Widget _buildTrendingCard(Map<String, dynamic> song) {
-    return Card(
-      margin: EdgeInsets.zero,
-      color: Colors.white.withOpacity(0.05),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-      child: InkWell(
-        onTap: () => playSong(song),
-        borderRadius: BorderRadius.circular(5),
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              AspectRatio(
-                aspectRatio: 1,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
-                  child: CachedNetworkImage(
-                    imageUrl: song['image_url'] ?? '',
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[850],
-                      child: const Icon(Icons.music_note, color: Colors.white54, size: 16),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Text(
-                    song['title'] ?? 'Unknown',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  // Navigation helper for album content view
+  void _navigateToAlbum(Map<String, dynamic> album) {
+    ContentViewController().navigateTo(
+      ContentType.album,
+      data: {
+        ...album,
+        'id': album['id'],
+        'title': album['title'] ?? 'Unknown Album',
+        'artist': album['artist'] ?? 'Various Artists',
+        'image_url': album['image_url'],
+        'category': album['category'] ?? 'album'
+      },
     );
   }
 
@@ -509,90 +425,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _toggleQueue(bool show) {
-    setState(() {
-      showQueue = show;
-    });
-  }
+  // Queue visibility toggle (currently unused after refactor)
+  // void _toggleQueue(bool show) => setState(() => showQueue = show);
 
-  // Method to navigate to album view using the ContentViewController
-  void _navigateToAlbum(Map<String, dynamic> album) {
-    // Use the ContentViewController to navigate to the album view
-    ContentViewController().navigateTo(
-      ContentType.album,
-      data: album,
-    );
-  }
-
-  // Add this method to _HomeScreenState
-  void _testPlaySong() {
-    final testSong = {
-      'id': 'test',
-      'title': 'Test Song',
-      'artist': 'Test Artist',
-      'audio_url': 'YOUR_TEST_AUDIO_URL_HERE', // Put a working audio URL here
-      'image_url': 'https://picsum.photos/200',
-    };
-    playSong(testSong);
-  }
-
-  Future<void> _handleSignOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Clear auth token
-    await prefs.remove('access_token');
-    // Clear last played song state
-    await prefs.remove('last_played_song');
-    await prefs.remove('was_playing');
-    // Sign out from Supabase
-    await Supabase.instance.client.auth.signOut();
-
-    // Navigate back to sign in screen
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const SignInScreen()),
-    );
-  }
-
-  Widget _buildNavItem(int index, String svgPath, String text) {
-    final isSelected = _tabController.index == index;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: () => _tabController.animateTo(index),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: isSelected ? Colors.white.withOpacity(0.1) : Colors.transparent,
-          ),
-          child: Row(
-            children: [
-              SvgPicture.asset(
-                svgPath,
-                width: 20,
-                height: 20,
-                color: isSelected ? Colors.white : Colors.grey,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                text,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey,
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w300 : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
+  // ------------ UI BUILD -------------
   @override
   Widget build(BuildContext context) {
-    // Create the content for the TabBarView
     return TabBarView(
       controller: _tabController,
       physics: const NeverScrollableScrollPhysics(),
@@ -614,26 +452,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHomeContent() {
-    return SingleChildScrollView(
+    final baseContent = SingleChildScrollView(
+      controller: _homeScrollController,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, _currentSong != null ? 124.0 : 24.0),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, _currentSong != null ? 124 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Greeting Section
-            Text(
-              'Greetings, $userName',
-              style: GoogleFonts.montserrat(
-                fontSize: 32,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
-                letterSpacing: -0.5,
-              ),
-            ),
+            Text('Greetings, $userName', style: GoogleFonts.montserrat(fontSize: 32, fontWeight: FontWeight.w300, color: Colors.white, letterSpacing: -0.5)),
             const SizedBox(height: 32),
-
-            // Dynamic Playlists Section
             DynamicPlaylistsSection(
               onPlaylistSelected: (playlist) {
                 _navigateToAlbum({
@@ -644,595 +471,172 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
             ),
             const SizedBox(height: 40),
-
-            // Quick Play Section
-            QuickPlaySection(
-              onSongSelected: (song) {
-                _audioService.playSong(song, restorePosition: false);
-              },
+            // (Mini queue toggle removed; queue available via main player queue button)
+            const SizedBox(height: 4),
+            SectionContainer(
+              title: 'Quick Play',
+              subtitle: 'Jump back into what you love',
+              isLoading: _isQuickPlayLoading,
+              error: _quickPlayError,
+              onRetry: _loadQuickPlaySongs,
+              child: _buildQuickPlayList(),
             ),
-            const SizedBox(height: 40),
-
-            // Just the Hits Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Just the Hits',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
-                )
-              ],
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: fetchHitAlbums(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final albums = snapshot.data ?? [];
-                return SizedBox(
-                  height: 250,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: albums.length,
-                    itemBuilder: (context, index) => _buildHitAlbumCard(albums[index]),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 40),
-
-            // New Releases Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'New Releases',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 260, // Increased from 220 to accommodate the content
+            const SizedBox(height: 32),
+            SectionContainer(
+              title: 'Just the Hits',
               child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: fetchNewReleases(),
+                future: fetchHitAlbums(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const SkeletonAlbumListHorizontal();
                   }
                   final albums = snapshot.data ?? [];
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: albums.length,
-                    itemBuilder: (context, index) {
-                      final album = albums[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: GestureDetector(
-                          onTap: () {
-                            ContentViewController().navigateTo(
-                              ContentType.album,
-                              data: {
-                                ...album,
-                                'id': album['id'], // Ensure ID is passed
-                                'title': album['title'] ?? 'Unknown Album',
-                                'artist': album['artist'] ?? 'Unknown Artist',
-                                'image_url': album['image_url'],
-                                'category': album['category'] ?? 'album'
-                              },
-                            );
-                          },
-                          child: NewReleaseItem(
-                            title: album['title'] ?? 'No Title',
-                            artist: album['artist'] ?? 'Unknown Artist',
-                            imageUrl: album['image_url'] ?? '',
-                            fileIdentifier: album['file_identifier'],
-                          ),
-                        ),
-                      );
-                    },
+                  if (albums.isEmpty) {
+                    return const SizedBox(height: 60, child: Center(child: Text('No hit albums', style: TextStyle(color: Colors.grey))));
+                  }
+                  return SizedBox(
+                    height: 250,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: albums.length,
+                      itemBuilder: (context, index) => HitAlbumCard(
+                        album: albums[index],
+                        backblazeService: _backblazeService,
+                        onTap: () => _navigateToAlbum(albums[index]),
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 40),
-
-            // Downloaded Albums Section
-            // Row(
-            //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //   children: [
-            //     Text(
-            //       'Downloaded Albums',
-            //       style: GoogleFonts.montserrat(
-            //         fontSize: 22,
-            //         fontWeight: FontWeight.w300,
-            //         color: Colors.white,
-            //       ),
-            //     ),
-            //     TextButton(
-            //       onPressed: () {
-            //         // Navigate to see all downloaded albums
-            //       },
-            //       child: Text(
-            //         'See All',
-            //         style: TextStyle(
-            //           fontSize: 14,
-            //           color: Colors.grey[400],
-            //         ),
-            //       ),
-            //     ),
-            //   ],
-            // ),
-            // const SizedBox(height: 16),
-            // SizedBox(
-            //   height: 260,
-            //   child: FutureBuilder<List<Map<String, dynamic>>>(
-            //     future: fetchDownloadedAlbums(),
-            //     builder: (context, snapshot) {
-            //       if (snapshot.connectionState == ConnectionState.waiting) {
-            //         return const Center(child: CircularProgressIndicator());
-            //       }
-
-            //       final albums = snapshot.data ?? [];
-
-            //       if (albums.isEmpty) {
-            //         return Center(
-            //           child: Column(
-            //             mainAxisAlignment: MainAxisAlignment.center,
-            //             children: [
-            //               Icon(Icons.download_done, size: 48, color: Colors.grey[600]),
-            //               const SizedBox(height: 16),
-            //               Text(
-            //                 'No downloaded albums yet',
-            //                 style: TextStyle(color: Colors.grey[400], fontSize: 16),
-            //               ),
-            //               const SizedBox(height: 8),
-            //               Text(
-            //                 'Download albums to listen offline',
-            //                 style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            //               ),
-            //             ],
-            //           ),
-            //         );
-            //       }
-
-            //       return ListView.builder(
-            //         scrollDirection: Axis.horizontal,
-            //         itemCount: albums.length,
-            //         itemBuilder: (context, index) {
-            //           final album = albums[index];
-            //           return _buildHitAlbumCard(album);
-            //         },
-            //       );
-            //     },
-            //   ),
-            // ),
-            // const SizedBox(height: 40),
-
-            // Recommended For You Section
-            if (_isLoadingRecommendations)
-              const Center(child: CircularProgressIndicator())
-            else if (_recommendedSongs != null && _recommendedSongs!.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  Text('Recommended For You', style: GoogleFonts.montserrat(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
+            const SizedBox(height: 32),
+            SectionContainer(
+              title: 'New Releases',
+              child: SizedBox(
+                height: 260,
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: fetchNewReleases(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SkeletonAlbumListHorizontal();
+                    }
+                    final albums = snapshot.data ?? [];
+                    if (albums.isEmpty) {
+                      return const Center(child: Text('No new releases', style: TextStyle(color: Colors.grey)));
+                    }
+                    return ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: _recommendedSongs!.length,
+                      itemCount: albums.length,
                       itemBuilder: (context, index) {
-                        final song = _recommendedSongs![index];
-                        return Card(
-                          child: Column(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: CachedNetworkImage(
-                                  imageUrl: song['image_url'] ?? '',
-                                  width: 120,
-                                  height: 120,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: Colors.grey[850],
-                                    child: const Icon(Icons.music_note, color: Colors.white54, size: 40),
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  song['title'] ?? '',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.montserrat(color: Colors.white, fontSize: 14),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  song['artist'] ?? '',
-                                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                                ),
-                              ),
-                            ],
+                        final album = albums[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: GestureDetector(
+                            onTap: () => _navigateToAlbum(album),
+                            child: NewReleaseItem(
+                              title: album['title'] ?? 'No Title',
+                              artist: album['artist'] ?? 'Unknown Artist',
+                              imageUrl: album['image_url'] ?? '',
+                              fileIdentifier: album['file_identifier'],
+                            ),
                           ),
                         );
                       },
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 40),
-
-            // Recommended Artists Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recommended Artists',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
+                    );
+                  },
                 ),
-                // TextButton(
-                //   onPressed: () {
-                //     // Navigate to see all artists
-                //   },
-                //   child: Text(
-                //     'See All',
-                //     style: TextStyle(
-                //       fontSize: 14,
-                //       color: Colors.grey[400],
-                //     ),
-                //   ),
-                // ),
-              ],
+              ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 180,
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: fetchArtists(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No artists found',
-                        style: TextStyle(color: Colors.grey),
+            const SizedBox(height: 32),
+            SectionContainer(
+              title: 'Recommended For You',
+              subtitle: 'Hand-picked based on your recent plays',
+              child: _isLoadingRecommendations
+                  ? const SkeletonListHorizontal(itemWidth: 150, itemHeight: 200)
+                  : (_recommendedSongs == null || _recommendedSongs!.isEmpty
+                      ? const SizedBox(height: 80, child: Center(child: Text('No recommendations yet – play more songs to personalize', style: TextStyle(color: Colors.grey))))
+                      : SizedBox(
+                          height: 200,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _recommendedSongs!.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 16),
+                            itemBuilder: (context, index) {
+                              final song = _recommendedSongs![index];
+                              final isActive = _currentSong?['id']?.toString() == song['id']?.toString();
+                              return RecommendedSongCard(
+                                song: song,
+                                isActive: isActive,
+                                onTap: () => playSong(song),
+                              );
+                            },
+                          ),
+                        )),
+            ),
+            const SizedBox(height: 32),
+            SectionContainer(
+              title: 'Recommended Artists',
+              child: SizedBox(
+                height: 180,
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: fetchArtists(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SkeletonArtistCircleList();
+                    }
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(child: Text('No artists found', style: TextStyle(color: Colors.grey)));
+                    }
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: snapshot.data!.length,
+                      itemBuilder: (context, index) => ArtistCircle(
+                        artist: snapshot.data![index],
+                        backblazeService: _backblazeService,
+                        onTap: () => ContentViewController().navigateTo(ContentType.artist, data: snapshot.data![index]),
                       ),
                     );
-                  }
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) => _buildArtistCircle(snapshot.data![index]),
-                  );
-                },
+                  },
+                ),
               ),
             ),
-            const SizedBox(height: 100), // Space for player
+            const SizedBox(height: 100),
           ],
         ),
       ),
     );
+  return baseContent; // Mini queue overlay removed
   }
 
-  Widget _buildHitAlbumCard(Map<String, dynamic> album) {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        bool isHovering = false;
-        return MouseRegion(
-          onEnter: (_) => setState(() => isHovering = true),
-          onExit: (_) => setState(() => isHovering = false),
-          child: GestureDetector(
-            onTap: () {
-              _navigateToAlbum(album);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              transform: Matrix4.identity()..scale(isHovering ? 1.05 : 1.0),
-              child: Container(
-                width: 200,
-                height: 250,
-                margin: const EdgeInsets.only(right: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Album Cover with Backblaze support
-                    Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(isHovering ? 0.4 : 0.2),
-                            blurRadius: isHovering ? 15 : 10,
-                            offset: Offset(0, isHovering ? 8 : 5),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        children: [
-                          // Album Image
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: FutureBuilder<String>(
-                              future: _backblazeService.getImageUrl(
-                                album['image_url'],
-                                album['file_identifier'],
-                              ),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return Container(
-                                    color: Colors.grey[850],
-                                    child: const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
-                                }
-
-                                if (snapshot.hasError) {
-                                  return Container(
-                                    color: Colors.grey[850],
-                                    child: const Icon(Icons.error_outline, color: Colors.white54, size: 48),
-                                  );
-                                }
-
-                                return CachedNetworkImage(
-                                  imageUrl: snapshot.data!,
-                                  height: 200,
-                                  width: 200,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: Colors.grey[850],
-                                    child: const Icon(Icons.album, color: Colors.white54, size: 48),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          // Play button overlay (visible on hover)
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.black.withOpacity(0.3),
-                              ),
-                              child: Center(
-                                child: Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.black.withOpacity(0.6),
-                                  ),
-                                  child: const Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.white,
-                                    size: 30,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Show download badge if album is downloaded
-                          if (album['downloaded'] == true)
-                            Positioned(
-                              right: 10,
-                              bottom: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.7),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.green, width: 1),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.download_done,
-                                      color: Colors.green,
-                                      size: 16,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Downloaded',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    // Album Info
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, left: 4), // Reduced top padding
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min, // Add mainAxisSize.min to prevent overflow
-                        children: [
-                          SizedBox(
-                            height: 20, // Fixed height for title
-                            child: Text(
-                              album['title'] ?? 'Unknown',
-                              style: GoogleFonts.montserrat(
-                                color: Colors.white,
-                                fontSize: 14, // Reduced font size
-                                fontWeight: FontWeight.w300,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(height: 2), // Reduced height
-                          SizedBox(
-                            height: 16, // Fixed height for artist
-                            child: Text(
-                              album['artist'] ?? 'Various Artists',
-                              style: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 12, // Reduced font size
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
+  // Quick Play list widget extraction
+  Widget _buildQuickPlayList() {
+    if (_isQuickPlayLoading) return const SkeletonListHorizontal(itemCount: 6);
+    if (_quickPlaySongs.isEmpty) {
+      return const SizedBox(
+        height: 80,
+        child: Center(child: Text('No songs found', style: TextStyle(color: Colors.grey))),
+      );
+    }
+    return SizedBox(
+      height: 230,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _quickPlaySongs.length > 8 ? 8 : _quickPlaySongs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (context, index) {
+          final song = _quickPlaySongs[index];
+          final isActive = _currentSong?['id']?.toString() == song['id']?.toString();
+          return QuickPlaySongCard(
+            song: song,
+            isActive: isActive,
+            onTap: () => playSong(song),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildArtistCircle(Map<String, dynamic> artist) {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        bool isHovering = false;
-        return MouseRegion(
-          onEnter: (_) => setState(() => isHovering = true),
-          onExit: (_) => setState(() => isHovering = false),
-          child: GestureDetector(
-            onTap: () {
-              ContentViewController().navigateTo(
-                ContentType.artist,
-                data: artist,
-              );
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              transform: Matrix4.identity()..scale(isHovering ? 1.1 : 1.0),
-              child: Container(
-                margin: const EdgeInsets.only(right: 24),
-                child: Column(
-                  children: [
-                    // Artist Image with Backblaze support
-                    Container(
-                      width: 130,
-                      height: 130,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(isHovering ? 0.4 : 0.2),
-                            blurRadius: isHovering ? 15 : 10,
-                            offset: Offset(0, isHovering ? 8 : 5),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        children: [
-                          // Artist Image
-                          ClipOval(
-                            child: FutureBuilder<String>(
-                              future: _backblazeService.getImageUrl(
-                                artist['image_url'],
-                                artist['file_identifier'],
-                              ),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return Container(
-                                    color: Colors.grey[850],
-                                    child: const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
-                                }
-
-                                if (snapshot.hasError) {
-                                  return Container(
-                                    color: Colors.grey[850],
-                                    child: const Icon(Icons.person, color: Colors.white54, size: 48),
-                                  );
-                                }
-
-                                return CachedNetworkImage(
-                                  imageUrl: snapshot.data!,
-                                  width: 130,
-                                  height: 130,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: Colors.grey[850],
-                                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    color: Colors.grey[850],
-                                    child: const Icon(Icons.person, color: Colors.white54, size: 48),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          // Hover overlay
-                          ClipOval(
-                            child: Container(
-                              width: 130,
-                              height: 130,
-                              color: Colors.black.withOpacity(0.2),
-                              child: Center(
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Artist Name
-                    Text(
-                      artist['name'] ?? 'Unknown Artist',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    );
-  }
+  // Old inline album/artist card builders removed (now using extracted widgets)
 }
 
 class NewReleaseItem extends StatefulWidget {
