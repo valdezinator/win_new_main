@@ -8,6 +8,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'download_service.dart';
 import 'ad_manager_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/recommendation_service.dart';
 
 /// Error types for better handling
 enum PlaybackError {
@@ -49,6 +51,9 @@ class AudioService {
   // Error logging constants
   static const int _maxTempFileAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
   Timer? _cleanupTimer;
+
+  String? _currentListeningSessionId;
+  DateTime? _currentListeningSessionStart;
 
   Stream<Map<String, dynamic>> get currentSongStream => _currentSongController.stream;
   Stream<bool> get isPlayingStream => _isPlayingController.stream;
@@ -197,6 +202,23 @@ class AudioService {
       _isPlaying = true;
       _isPlayingController.add(true);
       await _saveLastPlayedSong();
+
+      // Insert listening session for recommendations
+      try {
+        final user = Supabase.instance.client.auth.currentUser;
+        final songId = song['id']?.toString();
+        if (user != null && songId != null) {
+          final response = await Supabase.instance.client.from('user_listening_sessions').insert({
+            'user_id': user.id,
+            'song_id': songId,
+            'start_time': DateTime.now().toUtc().toIso8601String(),
+          }).select().single();
+          _currentListeningSessionId = response['id']?.toString();
+          _currentListeningSessionStart = DateTime.now().toUtc();
+        }
+      } catch (e) {
+        print('[AudioService] Error inserting listening session: $e');
+      }
     } catch (e) {
       _isPlaying = false;
       _isPlayingController.add(false);
@@ -452,11 +474,14 @@ class AudioService {
     AdManagerService().onPlaybackPaused();
     _isPlaying = false;
     _isPlayingController.add(false);
+    // Update listening session end
+    await _endListeningSession();
   }
 
   // Call this when a song finishes
   void onSongFinished() {
     AdManagerService().onSongFinished();
+    _endListeningSession();
   }
   
   // Check if a song is downloaded
@@ -509,14 +534,37 @@ class AudioService {
     await _isPlayingController.close();
   }
 
+  bool _appendedRecommendations = false; // Prevent infinite loop
+
   Future<void> playNext() async {
     try {
       print('[AudioService] playNext called. _queue length: ${_queue.length}, _currentIndex: ${_currentIndex}');
       if (_queue.isEmpty || _currentIndex >= _queue.length - 1) {
+        // Try to append recommendations if not already done
+        if (!_appendedRecommendations) {
+          final user = Supabase.instance.client.auth.currentUser;
+          if (user != null) {
+            final recs = await RecommendationService().getRecommendedSongs(user.id);
+            if (recs.isNotEmpty) {
+              _queue.addAll(recs);
+              _appendedRecommendations = true;
+              print('[AudioService] playNext: Appended recommended songs to queue.');
+              _currentIndex++;
+              final nextSongMap = _queue[_currentIndex];
+              final songToPlay = {
+                ...Map<String, dynamic>.from(nextSongMap),
+                'queue': _queue,
+              };
+              await playSong(songToPlay, restorePosition: false);
+              return;
+            }
+          }
+        }
         print('[AudioService] playNext: End of queue or queue is empty. Stopping playback.');
         if (player.playing) await player.stop();
         _isPlaying = false;
         _isPlayingController.add(false);
+        _appendedRecommendations = false; // Reset for next session
         return;
       }
 
@@ -525,6 +573,7 @@ class AudioService {
         print('[AudioService] playNext: _currentIndex out of bounds after increment: ${_currentIndex}');
         _isPlaying = false;
         _isPlayingController.add(false);
+        _appendedRecommendations = false;
         return;
       }
       final nextSongMap = _queue[_currentIndex];
@@ -532,6 +581,7 @@ class AudioService {
         print('[AudioService] playNext: nextSongMap is null at index ${_currentIndex}');
         _isPlaying = false;
         _isPlayingController.add(false);
+        _appendedRecommendations = false;
         return;
       }
       final songToPlay = {
@@ -627,4 +677,21 @@ class AudioService {
 
   bool get crossfadeEnabled => _crossfadeEnabled;
   int get crossfadeDurationMs => _crossfadeDurationMs;
+
+  Future<void> _endListeningSession() async {
+    if (_currentListeningSessionId != null && _currentListeningSessionStart != null) {
+      final endTime = DateTime.now().toUtc();
+      final duration = endTime.difference(_currentListeningSessionStart!).inMinutes;
+      try {
+        await Supabase.instance.client.from('user_listening_sessions').update({
+          'end_time': endTime.toIso8601String(),
+          'duration_minutes': duration,
+        }).eq('id', _currentListeningSessionId!);
+      } catch (e) {
+        print('[AudioService] Error updating listening session: $e');
+      }
+      _currentListeningSessionId = null;
+      _currentListeningSessionStart = null;
+    }
+  }
 }

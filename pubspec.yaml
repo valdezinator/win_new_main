@@ -1,4 +1,4 @@
-name: cresca
+name: resonance
 description: A modern music streaming platform for desktop.
 publish_to: 'none'
 version: 1.5.0
@@ -74,12 +74,10 @@ msix_config:
   publisher: CN=Resonance
   publisher_display_name: Resonance
   identity_name: com.resonance.app
-  msix_version: 1.5.0
-  logo_path: C:\Users\shrey\OneDrive\Documents\win_new_main\icon.jpg
+  msix_version: 1.5.0.0
   capabilities: internetClient, location, microphone
   enable_at_startup: true
   store: true
-  output_path: C:\Users\shrey\Downloads
   output_name: resonance
   certificate_path: ./resonance_cert.pfx
   certificate_password: 2008

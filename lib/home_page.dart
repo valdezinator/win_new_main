@@ -22,6 +22,7 @@ import 'package:google_fonts/google_fonts.dart'; // <-- Add this import
 import 'package:palette_generator/palette_generator.dart';
 import 'services/backblaze_service.dart';
 import 'widgets/quick_play_section.dart';
+import 'services/recommendation_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic>? initialSong;
@@ -50,6 +51,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final BackblazeService _backblazeService = BackblazeService();
   final ListeningTimeService _listeningTimeService = ListeningTimeService();
   final Map<String, Map<String, dynamic>> _songCache = {};
+  final RecommendationService _recommendationService = RecommendationService();
+  List<Map<String, dynamic>>? _recommendedSongs;
+  bool _isLoadingRecommendations = true;
 
   // Add user name - this would normally come from your auth service
   final String userName = "Peter";
@@ -67,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeJamSessionService();
     _initializeDynamicPlaylistService();
     _initializeListeningTimeService();
+    _loadRecommendations();
 
     // Debug: Check authentication state
     final user = supabaseClient.auth.currentUser;
@@ -306,6 +311,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       print('Error fetching new releases: $e');
       return [];
     }
+  }
+
+  Future<void> _loadRecommendations() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    final recs = await _recommendationService.getRecommendedSongs(user.id);
+    setState(() {
+      _recommendedSongs = recs;
+      _isLoadingRecommendations = false;
+    });
   }
 
   Widget _buildAlbumCard(Map<String, dynamic> album) {
@@ -649,19 +664,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
-                ),
-                // TextButton(
-                //   onPressed: () {
-                //     // Navigate to see all hits
-                //   },
-                //   child: Text(
-                //     'See All',
-                //     style: TextStyle(
-                //       fontSize: 14,
-                //       color: Colors.grey[400],
-                //     ),
-                //   ),
-                // ),
+                )
               ],
             ),
             const SizedBox(height: 16),
@@ -696,18 +699,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.white,
                   ),
                 ),
-                // TextButton(
-                //   onPressed: () {
-                //     // Navigate to see all new releases
-                //   },
-                //   child: Text(
-                //     'See All',
-                //     style: TextStyle(
-                //       fontSize: 14,
-                //       color: Colors.grey[400],
-                //     ),
-                //   ),
-                // ),
               ],
             ),
             const SizedBox(height: 16),
@@ -827,6 +818,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             //   ),
             // ),
             // const SizedBox(height: 40),
+
+            // Recommended For You Section
+            if (_isLoadingRecommendations)
+              const Center(child: CircularProgressIndicator())
+            else if (_recommendedSongs != null && _recommendedSongs!.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 24),
+                  Text('Recommended For You', style: GoogleFonts.montserrat(fontSize: 20, fontWeight: FontWeight.bold)),
+                  SizedBox(
+                    height: 200,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _recommendedSongs!.length,
+                      itemBuilder: (context, index) {
+                        final song = _recommendedSongs![index];
+                        return Card(
+                          child: Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: CachedNetworkImage(
+                                  imageUrl: song['image_url'] ?? '',
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.grey[850],
+                                    child: const Icon(Icons.music_note, color: Colors.white54, size: 40),
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  song['title'] ?? '',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.montserrat(color: Colors.white, fontSize: 14),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  song['artist'] ?? '',
+                                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 40),
 
             // Recommended Artists Section
             Row(

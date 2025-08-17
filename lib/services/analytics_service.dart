@@ -29,6 +29,8 @@ class AnalyticsService {
   static const String _eventDownload = 'download';
   static const String _eventError = 'error';
   
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   Future<void> initialize() async {
     if (_isInitialized) return;
     
@@ -241,6 +243,19 @@ class AnalyticsService {
       });
     } catch (e) {
       debugPrint('Error logging window state: $e');
+    }
+  }
+
+  Future<void> logRecommendationClick(String userId, String songId, String context) async {
+    try {
+      await _supabase.from('recommendation_clicks').insert({
+        'user_id': userId,
+        'song_id': songId,
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'context': context,
+      });
+    } catch (e) {
+      print('[AnalyticsService] Error logging recommendation click: $e');
     }
   }
   
